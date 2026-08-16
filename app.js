@@ -1,4 +1,4 @@
-// MEI Fácil IA - v3 com Login + Supabase
+// MEI Fácil IA - v4 Admin + Clientes + Mensalidade
 // Admin: fernandolapa1987@gmail.com
 
 let currentUser = null;
@@ -6,9 +6,15 @@ let currentProfile = null;
 let lancamentos = [];
 let currentFile = null;
 let currentBase64 = null;
+let clientes = [];
 
 function formatMoney(v) {
   return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('pt-BR');
 }
 
 // ---------- Auth ----------
@@ -57,10 +63,15 @@ async function iniciarApp() {
   document.getElementById('profile-email').textContent = currentUser.email;
   document.getElementById('profile-role').textContent = currentProfile?.role === 'admin' ? 'Administrador' : 'Usuário';
 
-  if (currentProfile?.role === 'admin') {
-    document.getElementById('admin-panel').classList.remove('hidden');
+  const isAdm = currentProfile?.role === 'admin';
+  document.getElementById('admin-panel')?.classList.toggle('hidden', !isAdm);
+  document.getElementById('clientes-panel')?.classList.toggle('hidden', !isAdm);
+  document.getElementById('nav-clientes')?.classList.toggle('hidden', !isAdm);
+
+  if (isAdm) {
     const key = await getGeminiKey();
     document.getElementById('gemini-status').textContent = key ? 'Chave configurada ✓' : 'Nenhuma chave salva';
+    await carregarClientes();
   }
 
   await carregarLancamentos();
@@ -69,7 +80,7 @@ async function iniciarApp() {
 
 // ---------- Navegação ----------
 function showScreen(name) {
-  ['dashboard', 'upload', 'profile'].forEach(s => {
+  ['dashboard', 'upload', 'profile', 'clientes'].forEach(s => {
     const el = document.getElementById('screen-' + s);
     if (el) el.classList.add('hidden');
   });
@@ -80,6 +91,119 @@ function showScreen(name) {
     b.classList.remove('active', 'text-blue-600');
     b.classList.add('text-slate-400');
   });
+  if (name === 'clientes') carregarClientes();
+}
+
+// ---------- Clientes (Admin) ----------
+async function carregarClientes() {
+  try {
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    clientes = data || [];
+    renderClientes();
+  } catch (e) {
+    console.error(e);
+    clientes = [];
+  }
+}
+
+function renderClientes() {
+  const lista = document.getElementById('lista-clientes');
+  if (!lista) return;
+
+  if (clientes.length === 0) {
+    lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Nenhum cliente cadastrado</p>';
+    return;
+  }
+
+  lista.innerHTML = clientes.map(c => {
+    const isAdmin = c.role === 'admin';
+    return `
+      <div class="card p-4 mb-2">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="font-semibold text-slate-800 text-sm">${c.nome || 'Sem nome'}</p>
+            <p class="text-xs text-slate-500">${c.id.substring(0,8)}...</p>
+          </div>
+          <span class="text-[10px] px-2 py-0.5 rounded-full ${isAdmin ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
+            ${isAdmin ? 'Admin' : (c.status || 'ativo')}
+          </span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-500">
+          <div>
+            <p class="text-slate-400">Ingressou</p>
+            <p class="font-medium text-slate-700">${formatDate(c.data_inicio || c.created_at)}</p>
+          </div>
+          <div>
+            <p class="text-slate-400">Próx. mensalidade</p>
+            <p class="font-medium text-slate-700">${formatDate(c.proxima_mensalidade)}</p>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function cadastrarCliente() {
+  const email = document.getElementById('novo-email').value.trim();
+  const senha = document.getElementById('novo-senha').value;
+  const nome = document.getElementById('novo-nome').value.trim() || email;
+  const dias = parseInt(document.getElementById('novo-dias').value) || 30;
+  const msg = document.getElementById('cadastro-msg');
+
+  if (!email || !senha) {
+    msg.textContent = 'Preencha email e senha';
+    msg.className = 'text-xs text-red-500 mt-2';
+    return;
+  }
+  if (senha.length < 6) {
+    msg.textContent = 'Senha precisa ter no mínimo 6 caracteres';
+    msg.className = 'text-xs text-red-500 mt-2';
+    return;
+  }
+
+  msg.textContent = 'Criando...';
+  msg.className = 'text-xs text-slate-500 mt-2';
+
+  try {
+    // Cria o usuário
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password: senha,
+      options: { data: { nome } }
+    });
+    if (error) throw error;
+
+    // Atualiza o perfil com data de mensalidade
+    if (data.user) {
+      const proxima = new Date();
+      proxima.setDate(proxima.getDate() + dias);
+
+      await supabaseClient
+        .from('profiles')
+        .update({
+          nome,
+          data_inicio: new Date().toISOString().slice(0,10),
+          proxima_mensalidade: proxima.toISOString().slice(0,10),
+          status: 'ativo',
+          role: 'user'
+        })
+        .eq('id', data.user.id);
+    }
+
+    msg.textContent = 'Cliente criado com sucesso!';
+    msg.className = 'text-xs text-green-600 mt-2';
+    document.getElementById('novo-email').value = '';
+    document.getElementById('novo-senha').value = '';
+    document.getElementById('novo-nome').value = '';
+    await carregarClientes();
+  } catch (e) {
+    msg.textContent = e.message || 'Erro ao criar cliente';
+    msg.className = 'text-xs text-red-500 mt-2';
+  }
 }
 
 // ---------- Lançamentos ----------
@@ -177,7 +301,7 @@ async function processarComIA() {
   if (!apiKey) {
     document.getElementById('loading-ia').classList.add('hidden');
     document.getElementById('preview-area').classList.remove('hidden');
-    alert('Nenhuma chave de IA configurada. Peça ao administrador para configurar.');
+    alert('Nenhuma chave de IA configurada. Peça ao administrador.');
     return;
   }
 
@@ -265,9 +389,38 @@ async function salvarChaveGemini() {
     await setGeminiKey(key);
     document.getElementById('gemini-status').textContent = 'Chave salva com sucesso ✓';
     document.getElementById('input-gemini-key').value = '';
-    alert('Chave da IA salva! Agora todos os usuários poderão usar.');
+    alert('Chave da IA salva!');
   } catch (e) {
     alert('Erro: ' + e.message);
+  }
+}
+
+async function trocarSenha() {
+  const nova = document.getElementById('nova-senha').value;
+  const conf = document.getElementById('conf-senha').value;
+  const msg = document.getElementById('senha-msg');
+
+  if (!nova || nova.length < 6) {
+    msg.textContent = 'Mínimo 6 caracteres';
+    msg.className = 'text-xs text-red-500 mt-2';
+    return;
+  }
+  if (nova !== conf) {
+    msg.textContent = 'As senhas não coincidem';
+    msg.className = 'text-xs text-red-500 mt-2';
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient.auth.updateUser({ password: nova });
+    if (error) throw error;
+    msg.textContent = 'Senha alterada com sucesso!';
+    msg.className = 'text-xs text-green-600 mt-2';
+    document.getElementById('nova-senha').value = '';
+    document.getElementById('conf-senha').value = '';
+  } catch (e) {
+    msg.textContent = e.message || 'Erro ao trocar senha';
+    msg.className = 'text-xs text-red-500 mt-2';
   }
 }
 

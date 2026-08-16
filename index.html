@@ -19,7 +19,7 @@
 </head>
 <body class="bg-slate-100 min-h-screen">
 
-  <!-- ========== LOGIN ========== -->
+  <!-- LOGIN -->
   <div id="screen-login" class="min-h-screen flex items-center justify-center px-4">
     <div class="card w-full max-w-sm p-6">
       <div class="text-center mb-6">
@@ -29,7 +29,6 @@
         <h1 class="text-xl font-bold text-slate-800">MEI Fácil IA</h1>
         <p class="text-sm text-slate-500 mt-1">Faça login para continuar</p>
       </div>
-
       <div class="space-y-3">
         <div>
           <label class="text-xs font-medium text-slate-500 mb-1 block">Email</label>
@@ -39,15 +38,13 @@
           <label class="text-xs font-medium text-slate-500 mb-1 block">Senha</label>
           <input id="login-password" type="password" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50" placeholder="••••••••">
         </div>
-        <button onclick="fazerLogin()" id="btn-login" class="btn-primary w-full py-3 rounded-xl text-white font-semibold mt-2">
-          Entrar
-        </button>
+        <button onclick="fazerLogin()" id="btn-login" class="btn-primary w-full py-3 rounded-xl text-white font-semibold mt-2">Entrar</button>
         <p id="login-error" class="text-xs text-red-500 text-center hidden"></p>
       </div>
     </div>
   </div>
 
-  <!-- ========== APP (escondido até logar) ========== -->
+  <!-- APP -->
   <div id="screen-app" class="hidden">
     <header class="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30">
       <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
@@ -78,7 +75,7 @@
           </div>
         </div>
         <div class="card p-4 mb-4">
-          <div class="flex justify-between items-start mb-2">
+          <div class="flex justify-between items-start">
             <div>
               <p class="text-[11px] text-slate-500 font-medium">Lucro do mês</p>
               <p id="lucro" class="text-2xl font-bold text-slate-800">R$ 0,00</p>
@@ -173,7 +170,34 @@
         </div>
       </div>
 
-      <!-- CONTA / ADMIN -->
+      <!-- CLIENTES (só admin) -->
+      <div id="screen-clientes" class="hidden fade-in">
+        <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
+          <i class="fas fa-arrow-left"></i> Voltar
+        </button>
+        <h2 class="text-xl font-bold text-slate-800 mb-4">Clientes</h2>
+
+        <!-- Cadastrar novo -->
+        <div class="card p-4 mb-4">
+          <h3 class="font-semibold text-slate-800 text-sm mb-3">Cadastrar novo cliente</h3>
+          <div class="space-y-2">
+            <input id="novo-nome" type="text" placeholder="Nome do cliente" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+            <input id="novo-email" type="email" placeholder="Email" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+            <input id="novo-senha" type="text" placeholder="Senha temporária" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+            <div>
+              <label class="text-xs text-slate-500">Dias até a 1ª mensalidade</label>
+              <input id="novo-dias" type="number" value="30" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+            </div>
+            <button onclick="cadastrarCliente()" class="btn-primary w-full py-2.5 rounded-xl text-white text-sm font-semibold">Criar conta e enviar</button>
+            <p id="cadastro-msg" class="text-xs mt-1"></p>
+          </div>
+        </div>
+
+        <h3 class="font-semibold text-slate-700 text-sm mb-2">Lista de clientes</h3>
+        <div id="lista-clientes"></div>
+      </div>
+
+      <!-- CONTA -->
       <div id="screen-profile" class="hidden fade-in">
         <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
           <i class="fas fa-arrow-left"></i> Voltar
@@ -183,10 +207,21 @@
           <p id="profile-email" class="font-semibold text-slate-800"></p>
           <p id="profile-role" class="text-xs text-blue-600 mt-1"></p>
         </div>
+
+        <!-- Trocar senha (todos) -->
+        <div class="card p-4 mb-4">
+          <h3 class="font-semibold text-slate-800 text-sm mb-3">Trocar minha senha</h3>
+          <input id="nova-senha" type="password" placeholder="Nova senha" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 mb-2">
+          <input id="conf-senha" type="password" placeholder="Confirmar senha" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 mb-2">
+          <button onclick="trocarSenha()" class="btn-primary w-full py-2.5 rounded-xl text-white text-sm font-semibold">Alterar senha</button>
+          <p id="senha-msg" class="text-xs mt-2"></p>
+        </div>
+
+        <!-- Admin: chave Gemini -->
         <div id="admin-panel" class="card p-4 mb-4 hidden">
-          <h3 class="font-semibold text-slate-800 text-sm mb-2">Chave da API Gemini (Admin)</h3>
-          <p class="text-xs text-slate-500 mb-3">Os outros usuários usarão esta chave automaticamente.</p>
-          <input id="input-gemini-key" type="password" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 mb-3" placeholder="Cole a chave Gemini aqui">
+          <h3 class="font-semibold text-slate-800 text-sm mb-2">Chave da API Gemini</h3>
+          <p class="text-xs text-slate-500 mb-3">Os clientes usam esta chave automaticamente.</p>
+          <input id="input-gemini-key" type="password" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 mb-3" placeholder="Cole a chave Gemini">
           <button onclick="salvarChaveGemini()" class="btn-primary w-full py-2.5 rounded-xl text-white text-sm font-semibold">Salvar chave da IA</button>
           <p id="gemini-status" class="text-xs text-slate-400 mt-2"></p>
         </div>
@@ -195,13 +230,16 @@
 
     <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30">
       <div class="max-w-lg mx-auto flex justify-around py-2">
-        <button onclick="showScreen('dashboard')" class="nav-item active flex flex-col items-center gap-0.5 px-5 py-1.5 text-blue-600">
+        <button onclick="showScreen('dashboard')" class="nav-item active flex flex-col items-center gap-0.5 px-4 py-1.5 text-blue-600">
           <i class="fas fa-home text-lg"></i><span class="text-[10px] font-medium">Início</span>
         </button>
-        <button onclick="showScreen('upload')" class="nav-item flex flex-col items-center gap-0.5 px-5 py-1.5 text-slate-400">
+        <button onclick="showScreen('upload')" class="nav-item flex flex-col items-center gap-0.5 px-4 py-1.5 text-slate-400">
           <i class="fas fa-plus-circle text-lg"></i><span class="text-[10px] font-medium">Adicionar</span>
         </button>
-        <button onclick="showScreen('profile')" class="nav-item flex flex-col items-center gap-0.5 px-5 py-1.5 text-slate-400">
+        <button id="nav-clientes" onclick="showScreen('clientes')" class="nav-item hidden flex flex-col items-center gap-0.5 px-4 py-1.5 text-slate-400">
+          <i class="fas fa-users text-lg"></i><span class="text-[10px] font-medium">Clientes</span>
+        </button>
+        <button onclick="showScreen('profile')" class="nav-item flex flex-col items-center gap-0.5 px-4 py-1.5 text-slate-400">
           <i class="fas fa-user text-lg"></i><span class="text-[10px] font-medium">Conta</span>
         </button>
       </div>
