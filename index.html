@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MEI Fácil IA</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: #f1f5f9;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .card {
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      transition: all 0.15s ease;
+    }
+    .btn-primary:active {
+      transform: scale(0.97);
+      opacity: 0.95;
+    }
+    .upload-area {
+      border: 2px dashed #cbd5e1;
+      transition: all 0.2s ease;
+    }
+    .upload-area.dragover, .upload-area:active {
+      border-color: #2563eb;
+      background: #eff6ff;
+    }
+    .loading-spinner {
+      border: 3px solid #e2e8f0;
+      border-top: 3px solid #2563eb;
+      border-radius: 50%;
+      width: 32px;
+      height: 32px;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .nav-item.active {
+      color: #2563eb !important;
+    }
+    .badge {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    input, select, textarea {
+      outline: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #2563eb !important;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+    .safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen pb-28">
+
+  <!-- Header -->
+  <header class="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30">
+    <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-md shadow-blue-200">
+          <i class="fas fa-robot text-white"></i>
+        </div>
+        <div>
+          <h1 class="font-bold text-slate-800 text-[17px] leading-tight tracking-tight">MEI Fácil IA</h1>
+          <p class="text-[11px] text-slate-500 font-medium">Organize seu dinheiro com IA</p>
+        </div>
+      </div>
+      <button onclick="showScreen('profile')" class="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 transition">
+        <i class="fas fa-user text-slate-600 text-sm"></i>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-lg mx-auto px-4 py-4">
+
+    <!-- DASHBOARD -->
+    <div id="screen-dashboard" class="fade-in">
+      <div class="grid grid-cols-2 gap-3 mb-3">
+        <div class="card p-4">
+          <div class="flex items-center gap-1.5 mb-1">
+            <div class="w-5 h-5 rounded-md bg-green-100 flex items-center justify-center">
+              <i class="fas fa-arrow-down text-green-600 text-[10px]"></i>
+            </div>
+            <p class="text-[11px] text-slate-500 font-medium">Receitas</p>
+          </div>
+          <p id="total-receitas" class="text-xl font-bold text-green-600 tracking-tight">R$ 0,00</p>
+        </div>
+        <div class="card p-4">
+          <div class="flex items-center gap-1.5 mb-1">
+            <div class="w-5 h-5 rounded-md bg-red-100 flex items-center justify-center">
+              <i class="fas fa-arrow-up text-red-500 text-[10px]"></i>
+            </div>
+            <p class="text-[11px] text-slate-500 font-medium">Despesas</p>
+          </div>
+          <p id="total-despesas" class="text-xl font-bold text-red-500 tracking-tight">R$ 0,00</p>
+        </div>
+      </div>
+
+      <div class="card p-4 mb-4">
+        <div class="flex justify-between items-start mb-3">
+          <div>
+            <p class="text-[11px] text-slate-500 font-medium mb-0.5">Lucro do mês</p>
+            <p id="lucro" class="text-2xl font-bold text-slate-800 tracking-tight">R$ 0,00</p>
+          </div>
+          <div class="text-right">
+            <p class="text-[11px] text-slate-500 font-medium mb-0.5">DAS estimado</p>
+            <p id="das" class="text-lg font-bold text-blue-600">R$ 0,00</p>
+          </div>
+        </div>
+        <div class="h-2 bg-slate-100 rounded-full overflow-hidden mb-1.5">
+          <div id="progress-bar" class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <div class="flex justify-between text-[11px] text-slate-400">
+          <span>Limite MEI 2026</span>
+          <span id="progress-text">0% de R$ 81.000</span>
+        </div>
+      </div>
+
+      <button onclick="showScreen('upload')" class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-[16px] flex items-center justify-center gap-2.5 mb-5 shadow-lg shadow-blue-300/40">
+        <i class="fas fa-camera text-lg"></i>
+        Adicionar nota / recibo
+      </button>
+
+      <div class="grid grid-cols-3 gap-2.5 mb-5">
+        <button onclick="showScreen('relatorios')" class="card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition">
+          <div class="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center">
+            <i class="fas fa-chart-pie text-violet-600"></i>
+          </div>
+          <span class="text-[11px] font-medium text-slate-600">Relatórios</span>
+        </button>
+        <button onclick="showScreen('categorias')" class="card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition">
+          <div class="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+            <i class="fas fa-tags text-amber-600"></i>
+          </div>
+          <span class="text-[11px] font-medium text-slate-600">Categorias</span>
+        </button>
+        <button onclick="exportarDados()" class="card p-3 flex flex-col items-center gap-1.5 active:scale-95 transition">
+          <div class="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center">
+            <i class="fas fa-file-export text-emerald-600"></i>
+          </div>
+          <span class="text-[11px] font-medium text-slate-600">Exportar</span>
+        </button>
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold text-slate-700 text-[15px]">Últimos lançamentos</h2>
+        <button onclick="clearData()" class="text-[11px] text-slate-400 font-medium">Limpar</button>
+      </div>
+
+      <div id="lista-lancamentos" class="space-y-2.5"></div>
+
+      <div id="empty-state" class="text-center py-12 text-slate-400">
+        <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3">
+          <i class="fas fa-receipt text-2xl opacity-50"></i>
+        </div>
+        <p class="font-medium text-slate-500">Nenhum lançamento ainda</p>
+        <p class="text-sm mt-1 text-slate-400">Tire foto de uma nota para começar</p>
+      </div>
+    </div>
+
+    <!-- UPLOAD -->
+    <div id="screen-upload" class="hidden fade-in">
+      <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
+        <i class="fas fa-arrow-left"></i> Voltar
+      </button>
+
+      <h2 class="text-xl font-bold text-slate-800 mb-1">Adicionar nota</h2>
+      <p class="text-slate-500 text-sm mb-5">Tire uma foto ou escolha da galeria. A IA vai ler e organizar sozinha.</p>
+
+      <div id="upload-area" class="mb-5">
+        <div class="grid grid-cols-2 gap-3 mb-3">
+          <button type="button" onclick="abrirCamera()" class="card p-5 flex flex-col items-center gap-2 active:scale-95 transition">
+            <div class="w-12 h-12 rounded-2xl bg-blue-50 flex items-center justify-center">
+              <i class="fas fa-camera text-xl text-blue-600"></i>
+            </div>
+            <span class="text-sm font-semibold text-slate-700">Tirar foto</span>
+          </button>
+          <button type="button" onclick="abrirGaleria()" class="card p-5 flex flex-col items-center gap-2 active:scale-95 transition">
+            <div class="w-12 h-12 rounded-2xl bg-violet-50 flex items-center justify-center">
+              <i class="fas fa-images text-xl text-violet-600"></i>
+            </div>
+            <span class="text-sm font-semibold text-slate-700">Galeria</span>
+          </button>
+        </div>
+        <p class="text-xs text-slate-400 text-center">JPG ou PNG • até 10 MB</p>
+        <input type="file" id="file-input-camera" accept="image/*" capture="environment" class="hidden" onchange="handleFile(event)">
+        <input type="file" id="file-input-gallery" accept="image/*" class="hidden" onchange="handleFile(event)">
+      </div>
+
+      <div id="preview-area" class="hidden mb-5">
+        <img id="preview-img" class="w-full rounded-2xl mb-3 max-h-60 object-contain bg-slate-50 border border-slate-100">
+        <button onclick="processarComIA()" id="btn-processar" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold flex items-center justify-center gap-2">
+          <i class="fas fa-magic"></i>
+          Processar com IA
+        </button>
+        <button onclick="resetUpload()" class="w-full mt-2 py-2.5 text-sm text-slate-500 font-medium">Escolher outra foto</button>
+      </div>
+
+      <div id="resultado-ia" class="hidden card p-5">
+        <div class="flex items-center gap-2.5 mb-4">
+          <div class="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
+            <i class="fas fa-check text-green-600"></i>
+          </div>
+          <div>
+            <p class="font-semibold text-slate-800">IA leu a nota!</p>
+            <p class="text-xs text-slate-400">Confira e ajuste se precisar</p>
+          </div>
+        </div>
+
+        <div class="space-y-3.5">
+          <div>
+            <label class="text-xs font-medium text-slate-500 mb-1 block">Descrição</label>
+            <input id="ia-descricao" type="text" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">Valor (R$)</label>
+              <input id="ia-valor" type="number" step="0.01" min="0" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">Tipo</label>
+              <select id="ia-tipo" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+                <option value="despesa">Despesa</option>
+                <option value="receita">Receita</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-slate-500 mb-1 block">Categoria</label>
+            <select id="ia-categoria" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+              <option>Materiais e Insumos</option>
+              <option>Transporte e Combustível</option>
+              <option>Alimentação</option>
+              <option>Serviços de Terceiros</option>
+              <option>Equipamentos e Ferramentas</option>
+              <option>Marketing e Publicidade</option>
+              <option>Internet e Telefone</option>
+              <option>Aluguel / Coworking</option>
+              <option>Software e Assinaturas</option>
+              <option>Impostos e Taxas</option>
+              <option>Cliente / Serviço Prestado</option>
+              <option>Outros</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-slate-500 mb-1 block">Forma de pagamento</label>
+            <select id="ia-pagamento" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50">
+              <option>Pix</option>
+              <option>Cartão de crédito</option>
+              <option>Cartão de débito</option>
+              <option>Dinheiro</option>
+              <option>Boleto</option>
+              <option>Transferência</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-slate-500 mb-1 block">Observações (opcional)</label>
+            <textarea id="ia-obs" rows="2" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 resize-none" placeholder="Ex: Nota fiscal nº 1234"></textarea>
+          </div>
+          <div class="flex items-center gap-2.5 pt-1">
+            <input type="checkbox" id="ia-dedutivel" checked class="w-4 h-4 rounded accent-blue-600">
+            <label for="ia-dedutivel" class="text-sm text-slate-600">Pode ser dedutível no imposto</label>
+          </div>
+        </div>
+
+        <button onclick="salvarLancamento()" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold mt-5">
+          Salvar lançamento
+        </button>
+      </div>
+
+      <div id="loading-ia" class="hidden text-center py-14">
+        <div class="loading-spinner mx-auto mb-4"></div>
+        <p class="text-slate-700 font-semibold">A IA está lendo a nota...</p>
+        <p class="text-sm text-slate-400 mt-1.5">Extraindo valor, descrição e categoria</p>
+      </div>
+    </div>
+
+    <!-- RELATÓRIOS -->
+    <div id="screen-relatorios" class="hidden fade-in">
+      <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
+        <i class="fas fa-arrow-left"></i> Voltar
+      </button>
+      <h2 class="text-xl font-bold text-slate-800 mb-1">Relatórios</h2>
+      <p class="text-slate-500 text-sm mb-5">Resumo do mês atual</p>
+
+      <div class="card p-4 mb-3">
+        <h3 class="font-semibold text-slate-700 text-sm mb-3">Por categoria (despesas)</h3>
+        <div id="relatorio-categorias" class="space-y-2.5"></div>
+        <p id="relatorio-vazio" class="text-sm text-slate-400 text-center py-4 hidden">Nenhuma despesa este mês</p>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-semibold text-slate-700 text-sm mb-2">Resumo rápido</h3>
+        <div class="space-y-2 text-sm">
+          <div class="flex justify-between">
+            <span class="text-slate-500">Total de lançamentos</span>
+            <span id="rel-total-lanc" class="font-medium text-slate-700">0</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Despesas dedutíveis</span>
+            <span id="rel-dedutiveis" class="font-medium text-slate-700">R$ 0,00</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-slate-500">Ticket médio (despesa)</span>
+            <span id="rel-ticket" class="font-medium text-slate-700">R$ 0,00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CATEGORIAS -->
+    <div id="screen-categorias" class="hidden fade-in">
+      <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
+        <i class="fas fa-arrow-left"></i> Voltar
+      </button>
+      <h2 class="text-xl font-bold text-slate-800 mb-1">Categorias</h2>
+      <p class="text-slate-500 text-sm mb-5">Categorias disponíveis no app</p>
+
+      <div class="card divide-y divide-slate-100">
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center"><i class="fas fa-box text-blue-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Materiais e Insumos</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center"><i class="fas fa-car text-orange-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Transporte e Combustível</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center"><i class="fas fa-utensils text-red-500 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Alimentação</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center"><i class="fas fa-handshake text-purple-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Serviços de Terceiros</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-cyan-50 flex items-center justify-center"><i class="fas fa-tools text-cyan-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Equipamentos e Ferramentas</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-pink-50 flex items-center justify-center"><i class="fas fa-bullhorn text-pink-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Marketing e Publicidade</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center"><i class="fas fa-wifi text-indigo-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Internet e Telefone</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center"><i class="fas fa-building text-teal-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Aluguel / Coworking</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center"><i class="fas fa-laptop-code text-slate-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Software e Assinaturas</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-yellow-50 flex items-center justify-center"><i class="fas fa-file-invoice-dollar text-yellow-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Impostos e Taxas</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center"><i class="fas fa-user-tie text-green-600 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Cliente / Serviço Prestado</span>
+        </div>
+        <div class="p-3.5 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center"><i class="fas fa-ellipsis-h text-gray-500 text-sm"></i></div>
+          <span class="text-sm font-medium text-slate-700">Outros</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div id="screen-profile" class="hidden fade-in">
+      <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
+        <i class="fas fa-arrow-left"></i> Voltar
+      </button>
+
+      <div class="card p-5 text-center mb-4">
+        <div class="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center mx-auto mb-3">
+          <i class="fas fa-user text-blue-600 text-2xl"></i>
+        </div>
+        <h2 class="font-bold text-lg text-slate-800">Configurações</h2>
+        <p class="text-sm text-slate-500 mt-1">Dados e chave ficam só neste navegador</p>
+      </div>
+
+      <!-- Chave da API -->
+      <div class="card p-4 mb-4">
+        <h3 class="font-semibold text-slate-800 text-sm mb-1">Chave da API Gemini</h3>
+        <p class="text-xs text-slate-500 mb-3">Cole sua chave aqui. Ela fica salva apenas neste dispositivo.</p>
+        
+        <input id="input-api-key" type="password" placeholder="Cole a chave aqui (AQ. ou AIzaSy...)" 
+               class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 mb-3">
+        
+        <div class="flex gap-2">
+          <button onclick="saveApiKey()" class="btn-primary flex-1 py-2.5 rounded-xl text-white text-sm font-semibold">
+            Salvar chave
+          </button>
+          <button onclick="clearApiKey()" class="px-4 py-2.5 rounded-xl text-sm font-medium bg-slate-100 text-slate-600">
+            Remover
+          </button>
+        </div>
+        <p id="api-key-status" class="text-xs text-slate-400 mt-2">Nenhuma chave salva</p>
+      </div>
+
+      <div class="card divide-y divide-slate-100 mb-4">
+        <div class="p-4 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-cloud text-slate-400 w-5"></i>
+            <span class="text-sm text-slate-700">Sincronização na nuvem</span>
+          </div>
+          <span class="badge bg-amber-100 text-amber-700">Em breve</span>
+        </div>
+        <div class="p-4 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-credit-card text-slate-400 w-5"></i>
+            <span class="text-sm text-slate-700">Assinatura via Mercado Pago</span>
+          </div>
+          <span class="badge bg-amber-100 text-amber-700">Em breve</span>
+        </div>
+        <div class="p-4 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i class="fas fa-file-pdf text-slate-400 w-5"></i>
+            <span class="text-sm text-slate-700">Relatório para contador</span>
+          </div>
+          <span class="badge bg-amber-100 text-amber-700">Em breve</span>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <p class="text-xs text-slate-500 leading-relaxed">
+          Quando você salvar a chave, o app usa a IA real do Gemini para ler as notas.
+          Sem a chave, ele usa a simulação.
+        </p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-30 safe-bottom">
+    <div class="max-w-lg mx-auto flex justify-around py-2">
+      <button onclick="showScreen('dashboard')" class="nav-item active flex flex-col items-center gap-0.5 px-5 py-1.5 text-blue-600">
+        <i class="fas fa-home text-lg"></i>
+        <span class="text-[10px] font-medium">Início</span>
+      </button>
+      <button onclick="showScreen('upload')" class="nav-item flex flex-col items-center gap-0.5 px-5 py-1.5 text-slate-400">
+        <i class="fas fa-plus-circle text-lg"></i>
+        <span class="text-[10px] font-medium">Adicionar</span>
+      </button>
+      <button onclick="showScreen('relatorios')" class="nav-item flex flex-col items-center gap-0.5 px-5 py-1.5 text-slate-400">
+        <i class="fas fa-chart-bar text-lg"></i>
+        <span class="text-[10px] font-medium">Relatórios</span>
+      </button>
+      <button onclick="showScreen('profile')" class="nav-item flex flex-col items-center gap-0.5 px-5 py-1.5 text-slate-400">
+        <i class="fas fa-cog text-lg"></i>
+        <span class="text-[10px] font-medium">Conta</span>
+      </button>
+    </div>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>
