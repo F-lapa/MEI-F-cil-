@@ -169,32 +169,28 @@ async function gerenciarCliente(action, userId) {
   if (action === 'pause' && !confirm('Pausar a assinatura deste cliente?')) return;
 
   try {
-    if (action === 'pause') {
-      const { error } = await supabaseClient
-        .from('profiles')
-        .update({ status: 'pausado' })
-        .eq('id', userId);
-      if (error) throw error;
-      alert('Assinatura pausada');
-    } else if (action === 'activate') {
-      const { error } = await supabaseClient
-        .from('profiles')
-        .update({ status: 'ativo' })
-        .eq('id', userId);
-      if (error) throw error;
-      alert('Assinatura ativada');
-    } else if (action === 'delete') {
-      // Soft delete - marca como apagado
-      const { error } = await supabaseClient
-        .from('profiles')
-        .update({ status: 'apagado' })
-        .eq('id', userId);
-      if (error) throw error;
-      alert('Cliente removido');
+    let novoStatus = action === 'pause' ? 'pausado' : action === 'activate' ? 'ativo' : 'apagado';
+    
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .update({ status: novoStatus })
+      .eq('id', userId)
+      .select();
+
+    if (error) {
+      alert('Erro do banco: ' + (error.message || error.code || JSON.stringify(error)));
+      return;
     }
+
+    if (!data || data.length === 0) {
+      alert('Bloqueado pelo banco (RLS). Rode o SQL que eu enviei e tente de novo.');
+      return;
+    }
+
+    alert(action === 'delete' ? 'Cliente removido' : action === 'pause' ? 'Assinatura pausada' : 'Assinatura ativada');
     await carregarClientes();
   } catch (e) {
-    alert('Erro: ' + (e.message || 'Tente novamente'));
+    alert('Erro: ' + (e.message || JSON.stringify(e)));
   }
 }
 
