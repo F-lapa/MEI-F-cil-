@@ -66,7 +66,7 @@ async function iniciarApp() {
   const isAdm = currentProfile?.role === 'admin';
   document.getElementById('admin-panel')?.classList.toggle('hidden', !isAdm);
   document.getElementById('clientes-panel')?.classList.toggle('hidden', !isAdm);
-  document.getElementById('nav-clientes')?.classList.toggle('hidden', !isAdm);
+  document.getElementById('nav-clientes')?.classList.remove('hidden');
 
   if (isAdm) {
     const key = await getGeminiKey();
