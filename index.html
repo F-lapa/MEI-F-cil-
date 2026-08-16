@@ -272,11 +272,26 @@
               <option>Dinheiro</option>
               <option>Boleto</option>
               <option>Transferência</option>
+              <option>Não identificado</option>
             </select>
           </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">Nº da nota</label>
+              <input id="ia-numero" type="text" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50" placeholder="Opcional">
+            </div>
+            <div>
+              <label class="text-xs font-medium text-slate-500 mb-1 block">Data da nota</label>
+              <input id="ia-data-nota" type="text" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50" placeholder="DD/MM/AAAA">
+            </div>
+          </div>
           <div>
-            <label class="text-xs font-medium text-slate-500 mb-1 block">Observações (opcional)</label>
-            <textarea id="ia-obs" rows="2" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 resize-none" placeholder="Ex: Nota fiscal nº 1234"></textarea>
+            <label class="text-xs font-medium text-slate-500 mb-1 block">CNPJ / CPF</label>
+            <input id="ia-cnpj" type="text" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50" placeholder="Se aparecer na nota">
+          </div>
+          <div>
+            <label class="text-xs font-medium text-slate-500 mb-1 block">Observações</label>
+            <textarea id="ia-obs" rows="2" class="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 resize-none" placeholder="Informações extras"></textarea>
           </div>
           <div class="flex items-center gap-2.5 pt-1">
             <input type="checkbox" id="ia-dedutivel" checked class="w-4 h-4 rounded accent-blue-600">

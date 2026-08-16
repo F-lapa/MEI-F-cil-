@@ -298,19 +298,28 @@ async function processarComIA() {
           contents: [{
             parts: [
               {
-                text: `Você é um assistente financeiro especializado em notas fiscais e recibos brasileiros.
-Analise a imagem e extraia as informações no formato JSON abaixo (responda SOMENTE com o JSON, sem texto extra):
+                text: `Você é um especialista em notas fiscais e recibos brasileiros para MEI e freelancers.
 
+Analise a imagem com atenção e responda SOMENTE com um JSON válido, sem nenhum texto antes ou depois.
+
+REGRAS PARA CLASSIFICAR TIPO (muito importante):
+- RECEITA = dinheiro que ENTROU (cliente pagou você, serviço prestado, venda, "recebido de", "pagamento do cliente", "honorários", "NF de serviço prestado")
+- DESPESA = dinheiro que SAIU (você comprou ou pagou algo, "pago a", "compra", "fatura", "boleto", "NF de compra")
+Se tiver dúvida, use "despesa".
+
+Campos do JSON:
 {
-  "descricao": "descrição curta e clara",
+  "descricao": "descrição clara e curta",
   "valor": 0.00,
-  "tipo": "despesa ou receita",
-  "categoria": "uma destas: Materiais e Insumos, Transporte e Combustível, Alimentação, Serviços de Terceiros, Equipamentos e Ferramentas, Marketing e Publicidade, Internet e Telefone, Aluguel / Coworking, Software e Assinaturas, Impostos e Taxas, Cliente / Serviço Prestado, Outros",
-  "pagamento": "Pix, Cartão de crédito, Cartão de débito, Dinheiro, Boleto ou Transferência",
-  "dedutivel": true
-}
-
-Se for pagamento recebido de cliente, use tipo "receita" e categoria "Cliente / Serviço Prestado".`
+  "tipo": "receita" ou "despesa",
+  "categoria": "Materiais e Insumos | Transporte e Combustível | Alimentação | Serviços de Terceiros | Equipamentos e Ferramentas | Marketing e Publicidade | Internet e Telefone | Aluguel / Coworking | Software e Assinaturas | Impostos e Taxas | Cliente / Serviço Prestado | Outros",
+  "pagamento": "Pix | Cartão de crédito | Cartão de débito | Dinheiro | Boleto | Transferência | Não identificado",
+  "numero_nota": "número da nota se aparecer, senão vazio",
+  "cnpj_cpf": "CNPJ ou CPF se aparecer, senão vazio",
+  "data_nota": "data no formato DD/MM/AAAA se aparecer, senão vazio",
+  "dedutivel": true,
+  "observacao": "informação extra útil"
+}`
               },
               {
                 inline_data: {
@@ -341,11 +350,14 @@ Se for pagamento recebido de cliente, use tipo "receita" e categoria "Cliente / 
 
     document.getElementById('ia-descricao').value = resultado.descricao || '';
     document.getElementById('ia-valor').value = Number(resultado.valor || 0).toFixed(2);
-    document.getElementById('ia-tipo').value = resultado.tipo === 'receita' ? 'receita' : 'despesa';
+    document.getElementById('ia-tipo').value = (resultado.tipo || '').toLowerCase().includes('receita') ? 'receita' : 'despesa';
     document.getElementById('ia-categoria').value = resultado.categoria || 'Outros';
     document.getElementById('ia-pagamento').value = resultado.pagamento || 'Pix';
+    document.getElementById('ia-numero').value = resultado.numero_nota || '';
+    document.getElementById('ia-cnpj').value = resultado.cnpj_cpf || '';
+    document.getElementById('ia-data-nota').value = resultado.data_nota || '';
     document.getElementById('ia-dedutivel').checked = resultado.dedutivel !== false;
-    document.getElementById('ia-obs').value = '';
+    document.getElementById('ia-obs').value = resultado.observacao || '';
 
     document.getElementById('loading-ia').classList.add('hidden');
     document.getElementById('resultado-ia').classList.remove('hidden');
@@ -384,6 +396,9 @@ function salvarLancamento() {
   const tipo = document.getElementById('ia-tipo').value;
   const categoria = document.getElementById('ia-categoria').value;
   const pagamento = document.getElementById('ia-pagamento').value;
+  const numero = document.getElementById('ia-numero').value.trim();
+  const cnpj = document.getElementById('ia-cnpj').value.trim();
+  const dataNota = document.getElementById('ia-data-nota').value.trim();
   const obs = document.getElementById('ia-obs').value.trim();
   const dedutivel = document.getElementById('ia-dedutivel').checked;
 
@@ -399,6 +414,9 @@ function salvarLancamento() {
     tipo,
     categoria,
     pagamento,
+    numero_nota: numero,
+    cnpj_cpf: cnpj,
+    data_nota: dataNota,
     obs,
     dedutivel,
     data: new Date().toISOString()
@@ -423,7 +441,7 @@ function exportarDados() {
     return;
   }
 
-  const header = 'Data;Descrição;Tipo;Categoria;Valor;Pagamento;Dedutível;Observações\n';
+  const header = 'Data;Descrição;Tipo;Categoria;Valor;Pagamento;Nº Nota;CNPJ/CPF;Data Nota;Dedutível;Observações\n';
   const rows = lancamentos.map(l => {
     return [
       new Date(l.data).toLocaleDateString('pt-BR'),
@@ -432,6 +450,9 @@ function exportarDados() {
       `"${l.categoria}"`,
       l.valor.toFixed(2).replace('.', ','),
       l.pagamento || '',
+      l.numero_nota || '',
+      l.cnpj_cpf || '',
+      l.data_nota || '',
       l.dedutivel ? 'Sim' : 'Não',
       `"${(l.obs || '').replace(/"/g, '""')}"`
     ].join(';');
