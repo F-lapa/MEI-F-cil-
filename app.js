@@ -165,11 +165,15 @@ async function cadastrarCliente() {
     return;
   }
 
-  msg.textContent = 'Criando...';
+  msg.textContent = 'Criando cliente...';
   msg.className = 'text-xs text-slate-500 mt-2';
 
+  // Guarda a sessão do admin para restaurar depois
+  const adminSession = await getSession();
+  const adminEmail = currentUser?.email;
+  const adminPassword = null; // não temos a senha salva
+
   try {
-    // Cria o usuário
     const { data, error } = await supabaseClient.auth.signUp({
       email,
       password: senha,
@@ -177,12 +181,14 @@ async function cadastrarCliente() {
     });
     if (error) throw error;
 
-    // Atualiza o perfil com data de mensalidade
     if (data.user) {
       const proxima = new Date();
       proxima.setDate(proxima.getDate() + dias);
 
-      await supabaseClient
+      // Espera o trigger criar o profile
+      await new Promise(r => setTimeout(r, 800));
+
+      const { error: upErr } = await supabaseClient
         .from('profiles')
         .update({
           nome,
@@ -192,17 +198,40 @@ async function cadastrarCliente() {
           role: 'user'
         })
         .eq('id', data.user.id);
+
+      if (upErr) console.warn('Aviso ao atualizar perfil:', upErr.message);
     }
 
-    msg.textContent = 'Cliente criado com sucesso!';
+    // Restaura a sessão do admin (signUp troca a sessão)
+    if (adminSession?.access_token) {
+      await supabaseClient.auth.setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token
+      });
+      currentUser = adminSession.user;
+      currentProfile = await getProfile(adminSession.user.id);
+    }
+
+    msg.textContent = 'Cliente criado com sucesso! Envie o email e a senha para ele.';
     msg.className = 'text-xs text-green-600 mt-2';
     document.getElementById('novo-email').value = '';
     document.getElementById('novo-senha').value = '';
     document.getElementById('novo-nome').value = '';
     await carregarClientes();
   } catch (e) {
+    console.error(e);
     msg.textContent = e.message || 'Erro ao criar cliente';
     msg.className = 'text-xs text-red-500 mt-2';
+
+    // Tenta restaurar admin mesmo em caso de erro
+    if (adminSession?.access_token) {
+      try {
+        await supabaseClient.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token
+        });
+      } catch (_) {}
+    }
   }
 }
 
