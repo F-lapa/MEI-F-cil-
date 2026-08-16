@@ -38,6 +38,12 @@ async function fazerLogin() {
     const { user } = await signIn(email, password);
     currentUser = user;
     currentProfile = await getProfile(user.id);
+    if (currentProfile?.status === 'pausado') {
+      await signOut();
+      errEl.textContent = 'Sua assinatura está pausada. Entre em contato com o suporte.';
+      errEl.classList.remove('hidden');
+      return;
+    }
     await iniciarApp();
   } catch (e) {
     errEl.textContent = e.message || 'Erro ao fazer login';
@@ -121,6 +127,10 @@ function renderClientes() {
 
   lista.innerHTML = clientes.map(c => {
     const isAdmin = c.role === 'admin';
+    const isPausado = c.status === 'pausado';
+    const statusClass = isAdmin ? 'bg-blue-100 text-blue-700' : (isPausado ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700');
+    const statusText = isAdmin ? 'Admin' : (c.status || 'ativo');
+
     return `
       <div class="card p-4 mb-2">
         <div class="flex justify-between items-start">
@@ -128,9 +138,7 @@ function renderClientes() {
             <p class="font-semibold text-slate-800 text-sm">${c.nome || 'Sem nome'}</p>
             <p class="text-xs text-slate-500">${c.id.substring(0,8)}...</p>
           </div>
-          <span class="text-[10px] px-2 py-0.5 rounded-full ${isAdmin ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}">
-            ${isAdmin ? 'Admin' : (c.status || 'ativo')}
-          </span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full ${statusClass}">${statusText}</span>
         </div>
         <div class="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-500">
           <div>
@@ -142,10 +150,45 @@ function renderClientes() {
             <p class="font-medium text-slate-700">${formatDate(c.proxima_mensalidade)}</p>
           </div>
         </div>
+        ${!isAdmin ? `
+        <div class="flex gap-2 mt-3">
+          ${isPausado
+            ? `<button onclick="gerenciarCliente('activate','${c.id}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-green-50 text-green-700">Ativar</button>`
+            : `<button onclick="gerenciarCliente('pause','${c.id}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700">Pausar</button>`
+          }
+          <button onclick="gerenciarCliente('delete','${c.id}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600">Apagar</button>
+        </div>` : ''}
       </div>
     `;
   }).join('');
 }
+
+async function gerenciarCliente(action, userId) {
+  if (action === 'delete' && !confirm('Apagar este cliente permanentemente?')) return;
+  if (action === 'pause' && !confirm('Pausar a assinatura deste cliente?')) return;
+
+  try {
+    const session = await getSession();
+    const response = await fetch(
+      'https://kpggwsttbvttkjeniftb.supabase.co/functions/v1/manage-client',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (session?.access_token || '')
+        },
+        body: JSON.stringify({ action, user_id: userId })
+      }
+    );
+    const result = await response.json();
+    if (!response.ok || result.error) throw new Error(result.error || 'Erro');
+    await carregarClientes();
+    alert(action === 'delete' ? 'Cliente apagado' : action === 'pause' ? 'Assinatura pausada' : 'Assinatura ativada');
+  } catch (e) {
+    alert('Erro: ' + (e.message || 'Tente novamente'));
+  }
+}
+
 
 async function cadastrarCliente() {
   const email = document.getElementById('novo-email').value.trim();
