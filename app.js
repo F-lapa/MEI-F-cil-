@@ -169,25 +169,41 @@ async function gerenciarCliente(action, userId) {
   if (action === 'pause' && !confirm('Pausar a assinatura deste cliente?')) return;
 
   try {
-    let novoStatus = action === 'pause' ? 'pausado' : action === 'activate' ? 'ativo' : 'apagado';
-    
-    const { data, error } = await supabaseClient
-      .from('profiles')
-      .update({ status: novoStatus })
-      .eq('id', userId)
-      .select();
+    if (action === 'delete') {
+      // Apaga de verdade do banco
+      const { data, error } = await supabaseClient
+        .from('profiles')
+        .delete()
+        .eq('id', userId)
+        .select();
 
-    if (error) {
-      alert('Erro do banco: ' + (error.message || error.code || JSON.stringify(error)));
-      return;
+      if (error) {
+        alert('Erro ao apagar: ' + (error.message || error.code || JSON.stringify(error)));
+        return;
+      }
+      if (!data || data.length === 0) {
+        alert('Não foi possível apagar (permissão bloqueada). Rode o SQL e tente de novo.');
+        return;
+      }
+      alert('Cliente apagado do banco');
+    } else {
+      const novoStatus = action === 'pause' ? 'pausado' : 'ativo';
+      const { data, error } = await supabaseClient
+        .from('profiles')
+        .update({ status: novoStatus })
+        .eq('id', userId)
+        .select();
+
+      if (error) {
+        alert('Erro: ' + (error.message || error.code || JSON.stringify(error)));
+        return;
+      }
+      if (!data || data.length === 0) {
+        alert('Bloqueado pelo banco (RLS). Rode o SQL e tente de novo.');
+        return;
+      }
+      alert(action === 'pause' ? 'Assinatura pausada' : 'Assinatura ativada');
     }
-
-    if (!data || data.length === 0) {
-      alert('Bloqueado pelo banco (RLS). Rode o SQL que eu enviei e tente de novo.');
-      return;
-    }
-
-    alert(action === 'delete' ? 'Cliente removido' : action === 'pause' ? 'Assinatura pausada' : 'Assinatura ativada');
     await carregarClientes();
   } catch (e) {
     alert('Erro: ' + (e.message || JSON.stringify(e)));
@@ -216,26 +232,45 @@ async function cadastrarCliente() {
   msg.textContent = 'Criando cliente...';
   msg.className = 'text-xs text-slate-500 mt-2';
 
+  // Guarda sessão do admin
+  const adminSession = await getSession();
+
   try {
-    const response = await fetch(
-      'https://kpggwsttbvttkjeniftb.supabase.co/functions/v1/create-client',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + (await getSession())?.access_token
-        },
-        body: JSON.stringify({ email, password: senha, nome, dias })
-      }
-    );
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password: senha,
+      options: { data: { nome } }
+    });
 
-    const result = await response.json();
+    if (error) throw error;
 
-    if (!response.ok || result.error) {
-      throw new Error(result.error || 'Erro ao criar cliente');
+    if (data.user) {
+      const proxima = new Date();
+      proxima.setDate(proxima.getDate() + dias);
+
+      // Espera o trigger criar o profile
+      await new Promise(r => setTimeout(r, 1000));
+
+      await supabaseClient.from('profiles').update({
+        nome,
+        role: 'user',
+        status: 'ativo',
+        data_inicio: new Date().toISOString().slice(0, 10),
+        proxima_mensalidade: proxima.toISOString().slice(0, 10)
+      }).eq('id', data.user.id);
     }
 
-    msg.textContent = 'Cliente criado com sucesso! Envie o email e a senha para ele.';
+    // Volta para a sessão do admin
+    if (adminSession?.access_token) {
+      await supabaseClient.auth.setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token
+      });
+      currentUser = adminSession.user;
+      currentProfile = await getProfile(adminSession.user.id);
+    }
+
+    msg.textContent = 'Cliente criado! Envie o email e a senha para ele.';
     msg.className = 'text-xs text-green-600 mt-2';
     document.getElementById('novo-email').value = '';
     document.getElementById('novo-senha').value = '';
@@ -245,10 +280,19 @@ async function cadastrarCliente() {
     console.error(e);
     msg.textContent = e.message || 'Erro ao criar cliente';
     msg.className = 'text-xs text-red-500 mt-2';
+
+    // Tenta voltar para o admin
+    if (adminSession?.access_token) {
+      try {
+        await supabaseClient.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token
+        });
+      } catch (_) {}
+    }
   }
 }
 
-// ---------- Lançamentos ----------
 async function carregarLancamentos() {
   if (!currentUser) return;
   try {
