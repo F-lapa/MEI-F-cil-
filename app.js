@@ -1,3 +1,4 @@
+// MEI Facil IA - v2 - Modelo: gemini-3.7-flash - 16/08/2026
 // =====================================================
 // MEI Fácil IA - Protótipo com suporte a Gemini real
 // A chave da API fica somente no localStorage do usuário
