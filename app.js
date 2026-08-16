@@ -1,17 +1,19 @@
-// MEI Fácil IA - v4 Admin + Clientes + Mensalidade
-// Admin: fernandolapa1987@gmail.com
-
+// MEI Fácil IA - v5 Completo
 let currentUser = null;
 let currentProfile = null;
 let lancamentos = [];
+let clientes = [];
 let currentFile = null;
 let currentBase64 = null;
-let clientes = [];
+let mesSelecionado = new Date().getMonth();
+let anoSelecionado = new Date().getFullYear();
+
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const LIMITE_MEI = 81000;
 
 function formatMoney(v) {
   return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
-
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('pt-BR');
@@ -23,17 +25,14 @@ async function fazerLogin() {
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
   const btn = document.getElementById('btn-login');
-
   if (!email || !password) {
     errEl.textContent = 'Preencha email e senha';
     errEl.classList.remove('hidden');
     return;
   }
-
   btn.textContent = 'Entrando...';
   btn.disabled = true;
   errEl.classList.add('hidden');
-
   try {
     const { user } = await signIn(email, password);
     currentUser = user;
@@ -71,8 +70,7 @@ async function iniciarApp() {
 
   const isAdm = currentProfile?.role === 'admin';
   document.getElementById('admin-panel')?.classList.toggle('hidden', !isAdm);
-  document.getElementById('clientes-panel')?.classList.toggle('hidden', !isAdm);
-  document.getElementById('nav-clientes')?.classList.remove('hidden');
+  document.getElementById('nav-clientes')?.classList.toggle('hidden', !isAdm);
 
   if (isAdm) {
     const key = await getGeminiKey();
@@ -84,23 +82,156 @@ async function iniciarApp() {
   showScreen('dashboard');
 }
 
-// ---------- Navegação ----------
 function showScreen(name) {
-  ['dashboard', 'upload', 'profile', 'clientes'].forEach(s => {
-    const el = document.getElementById('screen-' + s);
-    if (el) el.classList.add('hidden');
+  ['dashboard', 'upload', 'profile', 'clientes', 'relatorio'].forEach(s => {
+    document.getElementById('screen-' + s)?.classList.add('hidden');
   });
-  const target = document.getElementById('screen-' + name);
-  if (target) target.classList.remove('hidden');
-
-  document.querySelectorAll('.nav-item').forEach(b => {
-    b.classList.remove('active', 'text-blue-600');
-    b.classList.add('text-slate-400');
-  });
+  document.getElementById('screen-' + name)?.classList.remove('hidden');
   if (name === 'clientes') carregarClientes();
+  if (name === 'relatorio') atualizarRelatorio();
+  if (name === 'dashboard') atualizarDashboard();
 }
 
-// ---------- Clientes (Admin) ----------
+// ---------- Mês ----------
+function mudarMes(delta) {
+  mesSelecionado += delta;
+  if (mesSelecionado > 11) { mesSelecionado = 0; anoSelecionado++; }
+  if (mesSelecionado < 0) { mesSelecionado = 11; anoSelecionado--; }
+  atualizarDashboard();
+}
+
+function lancamentosDoMes() {
+  return lancamentos.filter(l => {
+    const d = new Date(l.data);
+    return d.getMonth() === mesSelecionado && d.getFullYear() === anoSelecionado;
+  });
+}
+
+function receitasAno() {
+  return lancamentos
+    .filter(l => l.tipo === 'receita' && new Date(l.data).getFullYear() === anoSelecionado)
+    .reduce((s, l) => s + Number(l.valor), 0);
+}
+
+// ---------- Dashboard ----------
+function atualizarDashboard() {
+  document.getElementById('mes-atual-label').textContent = MESES[mesSelecionado] + ' ' + anoSelecionado;
+
+  const doMes = lancamentosDoMes();
+  let receitas = 0, despesas = 0;
+  doMes.forEach(l => {
+    if (l.tipo === 'receita') receitas += Number(l.valor);
+    else despesas += Number(l.valor);
+  });
+
+  document.getElementById('total-receitas').textContent = formatMoney(receitas);
+  document.getElementById('total-despesas').textContent = formatMoney(despesas);
+  document.getElementById('lucro').textContent = formatMoney(receitas - despesas);
+  document.getElementById('das').textContent = formatMoney(receitas > 0 ? Math.max(71.60, receitas * 0.05) : 0);
+
+  // Limite MEI
+  const totalAno = receitasAno();
+  const pct = Math.min(100, (totalAno / LIMITE_MEI) * 100);
+  document.getElementById('progress-bar').style.width = pct + '%';
+  document.getElementById('progress-text').textContent = pct.toFixed(1) + '% de R$ 81.000';
+  document.getElementById('progress-bar').className = 'h-full rounded-full transition-all ' +
+    (pct >= 100 ? 'bg-red-500' : pct >= 80 ? 'bg-amber-500' : 'bg-blue-500');
+
+  const alerta = document.getElementById('alerta-mei');
+  const alertaTxt = document.getElementById('alerta-mei-texto');
+  if (pct >= 100) {
+    alerta.classList.remove('hidden');
+    alerta.className = 'card p-3 mb-3 border border-red-200 bg-red-50';
+    alertaTxt.className = 'text-xs text-red-800 font-medium';
+    alertaTxt.textContent = '⚠️ Você ultrapassou o limite anual do MEI (R$ 81.000)!';
+  } else if (pct >= 80) {
+    alerta.classList.remove('hidden');
+    alerta.className = 'card p-3 mb-3 border border-amber-200 bg-amber-50';
+    alertaTxt.className = 'text-xs text-amber-800 font-medium';
+    alertaTxt.textContent = '⚠️ Atenção: você já usou ' + pct.toFixed(0) + '% do limite do MEI neste ano.';
+  } else {
+    alerta.classList.add('hidden');
+  }
+
+  const lista = document.getElementById('lista-lancamentos');
+  const empty = document.getElementById('empty-state');
+  if (doMes.length === 0) {
+    lista.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  const ordenados = [...doMes].sort((a, b) => new Date(b.data) - new Date(a.data));
+  lista.innerHTML = ordenados.map(l => {
+    const isR = l.tipo === 'receita';
+    return `<div class="card p-3.5 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl ${isR ? 'bg-green-50' : 'bg-red-50'} flex items-center justify-center">
+        <i class="fas ${isR ? 'fa-arrow-down text-green-600' : 'fa-arrow-up text-red-500'} text-sm"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-medium text-slate-800 text-sm truncate">${l.descricao}</p>
+        <p class="text-[11px] text-slate-400">${l.categoria || ''} • ${new Date(l.data).toLocaleDateString('pt-BR')}</p>
+      </div>
+      <p class="font-semibold ${isR ? 'text-green-600' : 'text-red-500'} text-sm">${isR ? '+' : '−'} ${formatMoney(l.valor)}</p>
+    </div>`;
+  }).join('');
+}
+
+// ---------- Relatório ----------
+function atualizarRelatorio() {
+  document.getElementById('relatorio-mes-label').textContent = MESES[mesSelecionado] + ' de ' + anoSelecionado;
+  const doMes = lancamentosDoMes();
+  let receitas = 0, despesas = 0;
+  const porCat = {};
+  doMes.forEach(l => {
+    if (l.tipo === 'receita') receitas += Number(l.valor);
+    else {
+      despesas += Number(l.valor);
+      porCat[l.categoria || 'Outros'] = (porCat[l.categoria || 'Outros'] || 0) + Number(l.valor);
+    }
+  });
+  document.getElementById('rel-receitas').textContent = formatMoney(receitas);
+  document.getElementById('rel-despesas').textContent = formatMoney(despesas);
+  document.getElementById('rel-lucro').textContent = formatMoney(receitas - despesas);
+  document.getElementById('rel-das').textContent = formatMoney(receitas > 0 ? Math.max(71.60, receitas * 0.05) : 0);
+  document.getElementById('rel-qtd').textContent = doMes.length;
+
+  const catEl = document.getElementById('rel-categorias');
+  const entries = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+  if (entries.length === 0) {
+    catEl.innerHTML = '<p class="text-slate-400 text-xs">Nenhuma despesa neste mês</p>';
+  } else {
+    catEl.innerHTML = entries.map(([c, v]) =>
+      `<div class="flex justify-between"><span class="text-slate-600 truncate pr-2">${c}</span><span class="font-medium">${formatMoney(v)}</span></div>`
+    ).join('');
+  }
+}
+
+function exportarCSV() {
+  const doMes = lancamentosDoMes();
+  if (doMes.length === 0) {
+    alert('Não há lançamentos neste mês.');
+    return;
+  }
+  const header = 'Data;Descrição;Tipo;Categoria;Valor\n';
+  const rows = doMes.map(l => [
+    new Date(l.data).toLocaleDateString('pt-BR'),
+    `"${(l.descricao || '').replace(/"/g, '""')}"`,
+    l.tipo,
+    `"${l.categoria || ''}"`,
+    Number(l.valor).toFixed(2).replace('.', ',')
+  ].join(';')).join('\n');
+
+  const blob = new Blob(['\ufeff' + header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `relatorio-mei-${anoSelecionado}-${String(mesSelecionado + 1).padStart(2, '0')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- Clientes ----------
 async function carregarClientes() {
   try {
     const { data, error } = await supabaseClient
@@ -120,26 +251,22 @@ async function carregarClientes() {
 function renderClientes() {
   const lista = document.getElementById('lista-clientes');
   if (!lista) return;
-
   if (clientes.length === 0) {
     lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-6">Nenhum cliente cadastrado</p>';
     return;
   }
-
   lista.innerHTML = clientes.map(c => {
     const isAdmin = c.role === 'admin';
     const isPausado = c.status === 'pausado';
     const statusClass = isAdmin ? 'bg-blue-100 text-blue-700' : (isPausado ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700');
-    const statusText = isAdmin ? 'Admin' : (c.status || 'ativo');
-
     return `
       <div class="card p-4 mb-2">
         <div class="flex justify-between items-start">
           <div>
             <p class="font-semibold text-slate-800 text-sm">${c.nome || 'Sem nome'}</p>
-            <p class="text-xs text-slate-500">${c.id.substring(0,8)}...</p>
+            <p class="text-xs text-slate-500">${c.id.substring(0, 8)}...</p>
           </div>
-          <span class="text-[10px] px-2 py-0.5 rounded-full ${statusClass}">${statusText}</span>
+          <span class="text-[10px] px-2 py-0.5 rounded-full ${statusClass}">${isAdmin ? 'Admin' : (c.status || 'ativo')}</span>
         </div>
         <div class="grid grid-cols-2 gap-2 mt-3 text-xs text-slate-500">
           <div>
@@ -155,61 +282,49 @@ function renderClientes() {
         <div class="flex gap-2 mt-3">
           ${isPausado
             ? `<button onclick="gerenciarCliente('activate','${c.id}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-green-50 text-green-700">Ativar</button>`
-            : `<button onclick="gerenciarCliente('pause','${c.id}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700">Pausar</button>`
-          }
+            : `<button onclick="gerenciarCliente('pause','${c.id}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700">Pausar</button>`}
+          <button onclick="editarMensalidade('${c.id}','${c.proxima_mensalidade || ''}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-slate-50 text-slate-600">Mensalidade</button>
           <button onclick="gerenciarCliente('delete','${c.id}')" class="flex-1 py-2 rounded-lg text-xs font-semibold bg-red-50 text-red-600">Apagar</button>
         </div>` : ''}
-      </div>
-    `;
+      </div>`;
   }).join('');
+}
+
+async function editarMensalidade(userId, atual) {
+  const nova = prompt('Nova data da próxima mensalidade (AAAA-MM-DD):', atual || '');
+  if (!nova) return;
+  try {
+    const { data, error } = await supabaseClient.from('profiles').update({ proxima_mensalidade: nova }).eq('id', userId).select();
+    if (error) throw error;
+    if (!data?.length) { alert('Sem permissão para editar'); return; }
+    await carregarClientes();
+    alert('Data atualizada');
+  } catch (e) {
+    alert('Erro: ' + (e.message || e));
+  }
 }
 
 async function gerenciarCliente(action, userId) {
   if (action === 'delete' && !confirm('Apagar este cliente permanentemente?')) return;
   if (action === 'pause' && !confirm('Pausar a assinatura deste cliente?')) return;
-
   try {
     if (action === 'delete') {
-      // Apaga de verdade do banco
-      const { data, error } = await supabaseClient
-        .from('profiles')
-        .delete()
-        .eq('id', userId)
-        .select();
-
-      if (error) {
-        alert('Erro ao apagar: ' + (error.message || error.code || JSON.stringify(error)));
-        return;
-      }
-      if (!data || data.length === 0) {
-        alert('Não foi possível apagar (permissão bloqueada). Rode o SQL e tente de novo.');
-        return;
-      }
-      alert('Cliente apagado do banco');
+      const { data, error } = await supabaseClient.from('profiles').delete().eq('id', userId).select();
+      if (error) { alert('Erro ao apagar: ' + (error.message || error.code)); return; }
+      if (!data?.length) { alert('Sem permissão para apagar. Rode o SQL de permissão.'); return; }
+      alert('Cliente apagado');
     } else {
       const novoStatus = action === 'pause' ? 'pausado' : 'ativo';
-      const { data, error } = await supabaseClient
-        .from('profiles')
-        .update({ status: novoStatus })
-        .eq('id', userId)
-        .select();
-
-      if (error) {
-        alert('Erro: ' + (error.message || error.code || JSON.stringify(error)));
-        return;
-      }
-      if (!data || data.length === 0) {
-        alert('Bloqueado pelo banco (RLS). Rode o SQL e tente de novo.');
-        return;
-      }
+      const { data, error } = await supabaseClient.from('profiles').update({ status: novoStatus }).eq('id', userId).select();
+      if (error) { alert('Erro: ' + (error.message || error.code)); return; }
+      if (!data?.length) { alert('Sem permissão. Rode o SQL de permissão.'); return; }
       alert(action === 'pause' ? 'Assinatura pausada' : 'Assinatura ativada');
     }
     await carregarClientes();
   } catch (e) {
-    alert('Erro: ' + (e.message || JSON.stringify(e)));
+    alert('Erro: ' + (e.message || e));
   }
 }
-
 
 async function cadastrarCliente() {
   const email = document.getElementById('novo-email').value.trim();
@@ -217,59 +332,28 @@ async function cadastrarCliente() {
   const nome = document.getElementById('novo-nome').value.trim() || email;
   const dias = parseInt(document.getElementById('novo-dias').value) || 30;
   const msg = document.getElementById('cadastro-msg');
-
-  if (!email || !senha) {
-    msg.textContent = 'Preencha email e senha';
-    msg.className = 'text-xs text-red-500 mt-2';
-    return;
-  }
-  if (senha.length < 6) {
-    msg.textContent = 'Senha precisa ter no mínimo 6 caracteres';
-    msg.className = 'text-xs text-red-500 mt-2';
-    return;
-  }
-
-  msg.textContent = 'Criando cliente...';
-  msg.className = 'text-xs text-slate-500 mt-2';
-
-  // Guarda sessão do admin
+  if (!email || !senha) { msg.textContent = 'Preencha email e senha'; msg.className = 'text-xs text-red-500 mt-2'; return; }
+  if (senha.length < 6) { msg.textContent = 'Senha mínima 6 caracteres'; msg.className = 'text-xs text-red-500 mt-2'; return; }
+  msg.textContent = 'Criando cliente...'; msg.className = 'text-xs text-slate-500 mt-2';
   const adminSession = await getSession();
-
   try {
-    const { data, error } = await supabaseClient.auth.signUp({
-      email,
-      password: senha,
-      options: { data: { nome } }
-    });
-
+    const { data, error } = await supabaseClient.auth.signUp({ email, password: senha, options: { data: { nome } } });
     if (error) throw error;
-
     if (data.user) {
       const proxima = new Date();
       proxima.setDate(proxima.getDate() + dias);
-
-      // Espera o trigger criar o profile
       await new Promise(r => setTimeout(r, 1000));
-
       await supabaseClient.from('profiles').update({
-        nome,
-        role: 'user',
-        status: 'ativo',
+        nome, role: 'user', status: 'ativo',
         data_inicio: new Date().toISOString().slice(0, 10),
         proxima_mensalidade: proxima.toISOString().slice(0, 10)
       }).eq('id', data.user.id);
     }
-
-    // Volta para a sessão do admin
     if (adminSession?.access_token) {
-      await supabaseClient.auth.setSession({
-        access_token: adminSession.access_token,
-        refresh_token: adminSession.refresh_token
-      });
+      await supabaseClient.auth.setSession({ access_token: adminSession.access_token, refresh_token: adminSession.refresh_token });
       currentUser = adminSession.user;
       currentProfile = await getProfile(adminSession.user.id);
     }
-
     msg.textContent = 'Cliente criado! Envie o email e a senha para ele.';
     msg.className = 'text-xs text-green-600 mt-2';
     document.getElementById('novo-email').value = '';
@@ -277,22 +361,15 @@ async function cadastrarCliente() {
     document.getElementById('novo-nome').value = '';
     await carregarClientes();
   } catch (e) {
-    console.error(e);
     msg.textContent = e.message || 'Erro ao criar cliente';
     msg.className = 'text-xs text-red-500 mt-2';
-
-    // Tenta voltar para o admin
     if (adminSession?.access_token) {
-      try {
-        await supabaseClient.auth.setSession({
-          access_token: adminSession.access_token,
-          refresh_token: adminSession.refresh_token
-        });
-      } catch (_) {}
+      try { await supabaseClient.auth.setSession({ access_token: adminSession.access_token, refresh_token: adminSession.refresh_token }); } catch (_) {}
     }
   }
 }
 
+// ---------- Lançamentos ----------
 async function carregarLancamentos() {
   if (!currentUser) return;
   try {
@@ -302,49 +379,6 @@ async function carregarLancamentos() {
     console.error(e);
     lancamentos = [];
   }
-}
-
-function atualizarDashboard() {
-  const agora = new Date();
-  const doMes = lancamentos.filter(l => {
-    const d = new Date(l.data);
-    return d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear();
-  });
-
-  let receitas = 0, despesas = 0;
-  doMes.forEach(l => {
-    if (l.tipo === 'receita') receitas += Number(l.valor);
-    else despesas += Number(l.valor);
-  });
-
-  document.getElementById('total-receitas').textContent = formatMoney(receitas);
-  document.getElementById('total-despesas').textContent = formatMoney(despesas);
-  document.getElementById('lucro').textContent = formatMoney(receitas - despesas);
-  document.getElementById('das').textContent = formatMoney(receitas > 0 ? Math.max(71.60, receitas * 0.05) : 0);
-
-  const lista = document.getElementById('lista-lancamentos');
-  const empty = document.getElementById('empty-state');
-
-  if (lancamentos.length === 0) {
-    lista.innerHTML = '';
-    empty.classList.remove('hidden');
-    return;
-  }
-  empty.classList.add('hidden');
-
-  lista.innerHTML = lancamentos.slice(0, 20).map(l => {
-    const isR = l.tipo === 'receita';
-    return `<div class="card p-3.5 flex items-center gap-3">
-      <div class="w-10 h-10 rounded-xl ${isR ? 'bg-green-50' : 'bg-red-50'} flex items-center justify-center">
-        <i class="fas ${isR ? 'fa-arrow-down text-green-600' : 'fa-arrow-up text-red-500'} text-sm"></i>
-      </div>
-      <div class="flex-1 min-w-0">
-        <p class="font-medium text-slate-800 text-sm truncate">${l.descricao}</p>
-        <p class="text-[11px] text-slate-400">${l.categoria || ''} • ${new Date(l.data).toLocaleDateString('pt-BR')}</p>
-      </div>
-      <p class="font-semibold ${isR ? 'text-green-600' : 'text-red-500'} text-sm">${isR ? '+' : '−'} ${formatMoney(l.valor)}</p>
-    </div>`;
-  }).join('');
 }
 
 async function limparLancamentos() {
@@ -382,15 +416,13 @@ async function processarComIA() {
   if (!currentBase64) return;
   document.getElementById('preview-area').classList.add('hidden');
   document.getElementById('loading-ia').classList.remove('hidden');
-
-  let apiKey = await getGeminiKey();
+  const apiKey = await getGeminiKey();
   if (!apiKey) {
     document.getElementById('loading-ia').classList.add('hidden');
     document.getElementById('preview-area').classList.remove('hidden');
     alert('Nenhuma chave de IA configurada. Peça ao administrador.');
     return;
   }
-
   try {
     const base64Data = currentBase64.split(',')[1];
     const response = await fetch(
@@ -401,41 +433,29 @@ async function processarComIA() {
         body: JSON.stringify({
           contents: [{
             parts: [
-              {
-                text: `Você é especialista em notas fiscais brasileiras para MEI.
+              { text: `Você é especialista em notas fiscais brasileiras para MEI.
 Responda SOMENTE com JSON válido:
-{
-  "descricao": "descrição curta",
-  "valor": 0.00,
-  "tipo": "receita ou despesa",
-  "categoria": "Materiais e Insumos | Transporte e Combustível | Alimentação | Serviços de Terceiros | Equipamentos e Ferramentas | Marketing e Publicidade | Internet e Telefone | Aluguel / Coworking | Software e Assinaturas | Impostos e Taxas | Cliente / Serviço Prestado | Outros"
-}
-RECEITA = dinheiro que entrou. DESPESA = dinheiro que saiu.`
-              },
+{"descricao":"descrição curta","valor":0.00,"tipo":"receita ou despesa","categoria":"Materiais e Insumos | Transporte e Combustível | Alimentação | Serviços de Terceiros | Equipamentos e Ferramentas | Marketing e Publicidade | Internet e Telefone | Aluguel / Coworking | Software e Assinaturas | Impostos e Taxas | Cliente / Serviço Prestado | Outros"}
+RECEITA = dinheiro que entrou. DESPESA = dinheiro que saiu.` },
               { inline_data: { mime_type: currentFile.type || 'image/jpeg', data: base64Data } }
             ]
           }]
         })
       }
     );
-
     const data = await response.json();
     if (!response.ok) throw new Error(data.error?.message || 'Erro na API');
-
     const texto = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     const match = texto.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Resposta inválida da IA');
-
     const r = JSON.parse(match[0]);
     document.getElementById('ia-descricao').value = r.descricao || '';
     document.getElementById('ia-valor').value = Number(r.valor || 0).toFixed(2);
     document.getElementById('ia-tipo').value = (r.tipo || '').toLowerCase().includes('receita') ? 'receita' : 'despesa';
     document.getElementById('ia-categoria').value = r.categoria || 'Outros';
-
     document.getElementById('loading-ia').classList.add('hidden');
     document.getElementById('resultado-ia').classList.remove('hidden');
   } catch (e) {
-    console.error(e);
     document.getElementById('loading-ia').classList.add('hidden');
     document.getElementById('preview-area').classList.remove('hidden');
     alert('Erro ao processar: ' + (e.message || 'Tente novamente'));
@@ -447,17 +467,9 @@ async function salvarLancamento() {
   const valor = parseFloat(document.getElementById('ia-valor').value);
   const tipo = document.getElementById('ia-tipo').value;
   const categoria = document.getElementById('ia-categoria').value;
-
-  if (!descricao || isNaN(valor) || valor <= 0) {
-    alert('Preencha descrição e valor');
-    return;
-  }
-
+  if (!descricao || isNaN(valor) || valor <= 0) { alert('Preencha descrição e valor'); return; }
   try {
-    await addLancamento(currentUser.id, {
-      descricao, valor, tipo, categoria,
-      data: new Date().toISOString()
-    });
+    await addLancamento(currentUser.id, { descricao, valor, tipo, categoria, data: new Date().toISOString() });
     await carregarLancamentos();
     showScreen('dashboard');
   } catch (e) {
@@ -467,10 +479,7 @@ async function salvarLancamento() {
 
 async function salvarChaveGemini() {
   const key = document.getElementById('input-gemini-key').value.trim();
-  if (!key) {
-    alert('Cole a chave');
-    return;
-  }
+  if (!key) { alert('Cole a chave'); return; }
   try {
     await setGeminiKey(key);
     document.getElementById('gemini-status').textContent = 'Chave salva com sucesso ✓';
@@ -485,18 +494,8 @@ async function trocarSenha() {
   const nova = document.getElementById('nova-senha').value;
   const conf = document.getElementById('conf-senha').value;
   const msg = document.getElementById('senha-msg');
-
-  if (!nova || nova.length < 6) {
-    msg.textContent = 'Mínimo 6 caracteres';
-    msg.className = 'text-xs text-red-500 mt-2';
-    return;
-  }
-  if (nova !== conf) {
-    msg.textContent = 'As senhas não coincidem';
-    msg.className = 'text-xs text-red-500 mt-2';
-    return;
-  }
-
+  if (!nova || nova.length < 6) { msg.textContent = 'Mínimo 6 caracteres'; msg.className = 'text-xs text-red-500 mt-2'; return; }
+  if (nova !== conf) { msg.textContent = 'As senhas não coincidem'; msg.className = 'text-xs text-red-500 mt-2'; return; }
   try {
     const { error } = await supabaseClient.auth.updateUser({ password: nova });
     if (error) throw error;
@@ -510,12 +509,15 @@ async function trocarSenha() {
   }
 }
 
-// ---------- Init ----------
 document.addEventListener('DOMContentLoaded', async () => {
   const session = await getSession();
   if (session?.user) {
     currentUser = session.user;
     currentProfile = await getProfile(session.user.id);
+    if (currentProfile?.status === 'pausado') {
+      await signOut();
+      return;
+    }
     await iniciarApp();
   }
 });

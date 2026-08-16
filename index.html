@@ -12,8 +12,8 @@
     .card { background: white; border-radius: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03); }
     .btn-primary { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
     .btn-primary:active { transform: scale(0.97); }
-    .fade-in { animation: fadeIn 0.3s ease; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.25s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
     .nav-item.active { color: #2563eb !important; }
   </style>
 </head>
@@ -27,7 +27,7 @@
           <i class="fas fa-robot text-white text-xl"></i>
         </div>
         <h1 class="text-xl font-bold text-slate-800">MEI Fácil IA</h1>
-        <p class="text-sm text-slate-500 mt-1">Faça login para continuar</p>
+        <p class="text-sm text-slate-500 mt-1">Organize suas finanças com IA</p>
       </div>
       <div class="space-y-3">
         <div>
@@ -64,6 +64,18 @@
     <main class="max-w-lg mx-auto px-4 py-4 pb-28">
       <!-- DASHBOARD -->
       <div id="screen-dashboard" class="fade-in">
+        <!-- Seletor de mês -->
+        <div class="flex items-center justify-between mb-3">
+          <button onclick="mudarMes(-1)" class="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600"><i class="fas fa-chevron-left text-xs"></i></button>
+          <h2 id="mes-atual-label" class="font-semibold text-slate-800 text-sm"></h2>
+          <button onclick="mudarMes(1)" class="w-9 h-9 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-600"><i class="fas fa-chevron-right text-xs"></i></button>
+        </div>
+
+        <!-- Alerta MEI -->
+        <div id="alerta-mei" class="hidden card p-3 mb-3 border border-amber-200 bg-amber-50">
+          <p id="alerta-mei-texto" class="text-xs text-amber-800 font-medium"></p>
+        </div>
+
         <div class="grid grid-cols-2 gap-3 mb-3">
           <div class="card p-4">
             <p class="text-[11px] text-slate-500 font-medium mb-1">Receitas</p>
@@ -74,8 +86,8 @@
             <p id="total-despesas" class="text-xl font-bold text-red-500">R$ 0,00</p>
           </div>
         </div>
-        <div class="card p-4 mb-4">
-          <div class="flex justify-between items-start">
+        <div class="card p-4 mb-3">
+          <div class="flex justify-between items-start mb-2">
             <div>
               <p class="text-[11px] text-slate-500 font-medium">Lucro do mês</p>
               <p id="lucro" class="text-2xl font-bold text-slate-800">R$ 0,00</p>
@@ -85,18 +97,59 @@
               <p id="das" class="text-lg font-bold text-blue-600">R$ 0,00</p>
             </div>
           </div>
+          <div class="mt-2">
+            <div class="flex justify-between text-[11px] text-slate-500 mb-1">
+              <span>Limite MEI (ano)</span>
+              <span id="progress-text">0% de R$ 81.000</span>
+            </div>
+            <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div id="progress-bar" class="h-full bg-blue-500 rounded-full transition-all" style="width:0%"></div>
+            </div>
+          </div>
         </div>
-        <button onclick="showScreen('upload')" class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-[16px] flex items-center justify-center gap-2.5 mb-5 shadow-lg shadow-blue-300/40">
+
+        <button onclick="showScreen('upload')" class="btn-primary w-full py-4 rounded-2xl text-white font-semibold text-[16px] flex items-center justify-center gap-2.5 mb-3 shadow-lg shadow-blue-300/40">
           <i class="fas fa-camera text-lg"></i> Adicionar nota / recibo
         </button>
+        <button onclick="showScreen('relatorio')" class="w-full py-3 rounded-xl text-sm font-semibold bg-white border border-slate-200 text-slate-700 mb-5">
+          <i class="fas fa-file-export mr-2"></i> Relatório do mês
+        </button>
+
         <div class="flex items-center justify-between mb-3">
-          <h2 class="font-semibold text-slate-700 text-[15px]">Últimos lançamentos</h2>
+          <h2 class="font-semibold text-slate-700 text-[15px]">Lançamentos</h2>
           <button onclick="limparLancamentos()" class="text-[11px] text-slate-400 font-medium">Limpar</button>
         </div>
         <div id="lista-lancamentos" class="space-y-2.5"></div>
         <div id="empty-state" class="text-center py-12 text-slate-400">
-          <p class="font-medium text-slate-500">Nenhum lançamento ainda</p>
+          <p class="font-medium text-slate-500">Nenhum lançamento neste mês</p>
         </div>
+      </div>
+
+      <!-- RELATÓRIO -->
+      <div id="screen-relatorio" class="hidden fade-in">
+        <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
+          <i class="fas fa-arrow-left"></i> Voltar
+        </button>
+        <h2 class="text-xl font-bold text-slate-800 mb-1">Relatório</h2>
+        <p id="relatorio-mes-label" class="text-sm text-slate-500 mb-4"></p>
+
+        <div class="card p-4 mb-3 space-y-2 text-sm">
+          <div class="flex justify-between"><span class="text-slate-500">Receitas</span><span id="rel-receitas" class="font-semibold text-green-600">R$ 0,00</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Despesas</span><span id="rel-despesas" class="font-semibold text-red-500">R$ 0,00</span></div>
+          <div class="flex justify-between border-t border-slate-100 pt-2"><span class="text-slate-700 font-medium">Lucro</span><span id="rel-lucro" class="font-bold text-slate-800">R$ 0,00</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">DAS estimado</span><span id="rel-das" class="font-semibold text-blue-600">R$ 0,00</span></div>
+          <div class="flex justify-between"><span class="text-slate-500">Qtd. lançamentos</span><span id="rel-qtd" class="font-semibold text-slate-700">0</span></div>
+        </div>
+
+        <div class="card p-4 mb-4">
+          <h3 class="font-semibold text-slate-800 text-sm mb-2">Por categoria (despesas)</h3>
+          <div id="rel-categorias" class="space-y-2 text-sm"></div>
+        </div>
+
+        <button onclick="exportarCSV()" class="btn-primary w-full py-3.5 rounded-xl text-white font-semibold mb-2">
+          <i class="fas fa-download mr-2"></i> Exportar CSV
+        </button>
+        <p class="text-xs text-slate-400 text-center">Envie o arquivo para o contador</p>
       </div>
 
       <!-- UPLOAD -->
@@ -170,14 +223,12 @@
         </div>
       </div>
 
-      <!-- CLIENTES (só admin) -->
+      <!-- CLIENTES -->
       <div id="screen-clientes" class="hidden fade-in">
         <button onclick="showScreen('dashboard')" class="flex items-center gap-2 text-slate-600 mb-4 font-medium text-sm">
           <i class="fas fa-arrow-left"></i> Voltar
         </button>
         <h2 class="text-xl font-bold text-slate-800 mb-4">Clientes</h2>
-
-        <!-- Cadastrar novo -->
         <div class="card p-4 mb-4">
           <h3 class="font-semibold text-slate-800 text-sm mb-3">Cadastrar novo cliente</h3>
           <div class="space-y-2">
@@ -192,7 +243,6 @@
             <p id="cadastro-msg" class="text-xs mt-1"></p>
           </div>
         </div>
-
         <h3 class="font-semibold text-slate-700 text-sm mb-2">Lista de clientes</h3>
         <div id="lista-clientes"></div>
       </div>
@@ -207,8 +257,6 @@
           <p id="profile-email" class="font-semibold text-slate-800"></p>
           <p id="profile-role" class="text-xs text-blue-600 mt-1"></p>
         </div>
-
-        <!-- Trocar senha (todos) -->
         <div class="card p-4 mb-4">
           <h3 class="font-semibold text-slate-800 text-sm mb-3">Trocar minha senha</h3>
           <input id="nova-senha" type="password" placeholder="Nova senha" class="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm bg-slate-50 mb-2">
@@ -216,8 +264,6 @@
           <button onclick="trocarSenha()" class="btn-primary w-full py-2.5 rounded-xl text-white text-sm font-semibold">Alterar senha</button>
           <p id="senha-msg" class="text-xs mt-2"></p>
         </div>
-
-        <!-- Admin: chave Gemini -->
         <div id="admin-panel" class="card p-4 mb-4 hidden">
           <h3 class="font-semibold text-slate-800 text-sm mb-2">Chave da API Gemini</h3>
           <p class="text-xs text-slate-500 mb-3">Os clientes usam esta chave automaticamente.</p>
