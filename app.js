@@ -208,191 +208,188 @@ function atualizarRelatorio() {
 }
 
 
+
 function gerarPDF() {
-  const doMes = lancamentosDoMes();
-  if (doMes.length === 0) {
-    alert('Não há lançamentos neste mês.');
-    return;
-  }
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const pageW = doc.internal.pageSize.getWidth();
-  let y = 18;
-
-  let receitas = 0, despesas = 0;
-  const porCat = {};
-  doMes.forEach(l => {
-    if (l.tipo === 'receita') receitas += Number(l.valor);
-    else {
-      despesas += Number(l.valor);
-      porCat[l.categoria || 'Outros'] = (porCat[l.categoria || 'Outros'] || 0) + Number(l.valor);
+  try {
+    const doMes = lancamentosDoMes();
+    if (doMes.length === 0) {
+      alert('Não há lançamentos neste mês.');
+      return;
     }
-  });
-  const lucro = receitas - despesas;
-  const das = receitas > 0 ? Math.max(71.60, receitas * 0.05) : 0;
-  const mesNome = MESES[mesSelecionado] + ' de ' + anoSelecionado;
-  const fmt = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Header
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageW, 28, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('MEI Facil IA', 14, 12);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Relatorio financeiro para contador', 14, 20);
+    // Compatibilidade com diferentes formas de carregar o jsPDF
+    let JsPDF = null;
+    if (window.jspdf && window.jspdf.jsPDF) JsPDF = window.jspdf.jsPDF;
+    else if (window.jsPDF) JsPDF = window.jsPDF;
+    else if (typeof jspdf !== 'undefined' && jspdf.jsPDF) JsPDF = jspdf.jsPDF;
 
-  y = 38;
-  doc.setTextColor(30, 41, 59);
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Periodo: ' + mesNome, 14, y);
-  y += 6;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text('Gerado em ' + new Date().toLocaleDateString('pt-BR') + ' as ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}), 14, y);
-  if (currentUser?.email) {
-    y += 5;
-    doc.text('Conta: ' + currentUser.email, 14, y);
-  }
+    if (!JsPDF) {
+      alert('Biblioteca de PDF não carregou. Atualize a página e tente de novo.');
+      return;
+    }
 
-  // Summary boxes
-  y += 12;
-  doc.setDrawColor(226, 232, 240);
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(14, y, 85, 28, 3, 3, 'FD');
-  doc.roundedRect(105, y, 85, 28, 3, 3, 'FD');
+    const doc = new JsPDF({ unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    let y = 18;
 
-  doc.setFontSize(9);
-  doc.setTextColor(100, 116, 139);
-  doc.text('Receitas', 20, y + 8);
-  doc.text('Despesas', 111, y + 8);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(22, 163, 74);
-  doc.text('R$ ' + fmt(receitas), 20, y + 18);
-  doc.setTextColor(239, 68, 68);
-  doc.text('R$ ' + fmt(despesas), 111, y + 18);
+    let receitas = 0, despesas = 0;
+    const porCat = {};
+    doMes.forEach(l => {
+      if (l.tipo === 'receita') receitas += Number(l.valor);
+      else {
+        despesas += Number(l.valor);
+        porCat[l.categoria || 'Outros'] = (porCat[l.categoria || 'Outros'] || 0) + Number(l.valor);
+      }
+    });
+    const lucro = receitas - despesas;
+    const das = receitas > 0 ? Math.max(71.60, receitas * 0.05) : 0;
+    const mesNome = MESES[mesSelecionado] + ' de ' + anoSelecionado;
+    const fmt = (v) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  y += 36;
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(14, y, 85, 28, 3, 3, 'FD');
-  doc.roundedRect(105, y, 85, 28, 3, 3, 'FD');
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(100, 116, 139);
-  doc.text('Lucro', 20, y + 8);
-  doc.text('DAS estimado', 111, y + 8);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(30, 41, 59);
-  doc.text('R$ ' + fmt(lucro), 20, y + 18);
-  doc.setTextColor(37, 99, 235);
-  doc.text('R$ ' + fmt(das), 111, y + 18);
+    // Header
+    doc.setFillColor(37, 99, 235);
+    doc.rect(0, 0, pageW, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MEI Facil IA', 14, 12);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Relatorio financeiro para contador', 14, 20);
 
-  // Categories
-  y += 40;
-  const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
-  if (cats.length) {
+    y = 38;
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Periodo: ' + mesNome, 14, y);
+    y += 6;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Gerado em ' + new Date().toLocaleDateString('pt-BR'), 14, y);
+    if (currentUser && currentUser.email) {
+      y += 5;
+      doc.text('Conta: ' + currentUser.email, 14, y);
+    }
+
+    // Summary
+    y += 12;
+    doc.setDrawColor(226, 232, 240);
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, y, 85, 28, 3, 3, 'FD');
+    doc.roundedRect(105, y, 85, 28, 3, 3, 'FD');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Receitas', 20, y + 8);
+    doc.text('Despesas', 111, y + 8);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(22, 163, 74);
+    doc.text('R$ ' + fmt(receitas), 20, y + 18);
+    doc.setTextColor(239, 68, 68);
+    doc.text('R$ ' + fmt(despesas), 111, y + 18);
+
+    y += 36;
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(14, y, 85, 28, 3, 3, 'FD');
+    doc.roundedRect(105, y, 85, 28, 3, 3, 'FD');
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Lucro', 20, y + 8);
+    doc.text('DAS estimado', 111, y + 8);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('R$ ' + fmt(lucro), 20, y + 18);
+    doc.setTextColor(37, 99, 235);
+    doc.text('R$ ' + fmt(das), 111, y + 18);
+
+    // Categories
+    y += 40;
+    const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+    if (cats.length) {
+      doc.setTextColor(30, 41, 59);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Despesas por categoria', 14, y);
+      y += 8;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      cats.forEach(function(item) {
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setTextColor(71, 85, 105);
+        doc.text(String(item[0]).substring(0, 40), 14, y);
+        doc.setTextColor(30, 41, 59);
+        doc.text('R$ ' + fmt(item[1]), pageW - 14, y, { align: 'right' });
+        y += 6;
+      });
+    }
+
+    // Details
+    y += 10;
+    if (y > 250) { doc.addPage(); y = 20; }
     doc.setTextColor(30, 41, 59);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('Despesas por categoria', 14, y);
+    doc.text('Detalhamento dos lancamentos', 14, y);
     y += 8;
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    cats.forEach(([c, v]) => {
-      if (y > 270) { doc.addPage(); y = 20; }
-      doc.setTextColor(71, 85, 105);
-      doc.text(c.substring(0, 40), 14, y);
-      doc.setTextColor(30, 41, 59);
-      doc.text('R$ ' + fmt(v), pageW - 14, y, { align: 'right' });
-      y += 6;
-    });
-  }
 
-  // Detail table
-  y += 10;
-  if (y > 250) { doc.addPage(); y = 20; }
-  doc.setTextColor(30, 41, 59);
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Detalhamento dos lancamentos', 14, y);
-  y += 8;
-
-  // Table header
-  doc.setFillColor(37, 99, 235);
-  doc.rect(14, y - 4, pageW - 28, 8, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Data', 16, y);
-  doc.text('Descricao', 36, y);
-  doc.text('Tipo', 120, y);
-  doc.text('Valor', pageW - 16, y, { align: 'right' });
-  y += 8;
-
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(30, 41, 59);
-  const ordenados = [...doMes].sort((a, b) => new Date(a.data) - new Date(b.data));
-  ordenados.forEach((l, i) => {
-    if (y > 280) {
-      doc.addPage();
-      y = 20;
-    }
-    if (i % 2 === 0) {
-      doc.setFillColor(248, 250, 252);
-      doc.rect(14, y - 4, pageW - 28, 7, 'F');
-    }
-    const data = new Date(l.data).toLocaleDateString('pt-BR');
-    const desc = (l.descricao || '').substring(0, 42);
-    const tipo = l.tipo === 'receita' ? 'Receita' : 'Despesa';
+    doc.setFillColor(37, 99, 235);
+    doc.rect(14, y - 4, pageW - 28, 8, 'F');
+    doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
-    doc.setTextColor(71, 85, 105);
-    doc.text(data, 16, y);
-    doc.text(desc, 36, y);
-    doc.text(tipo, 120, y);
-    doc.setTextColor(l.tipo === 'receita' ? 22 : 239, l.tipo === 'receita' ? 163 : 68, l.tipo === 'receita' ? 74 : 68);
-    doc.text((l.tipo === 'receita' ? '+ ' : '- ') + 'R$ ' + fmt(l.valor), pageW - 16, y, { align: 'right' });
-    y += 7;
-  });
+    doc.setFont('helvetica', 'bold');
+    doc.text('Data', 16, y);
+    doc.text('Descricao', 36, y);
+    doc.text('Tipo', 120, y);
+    doc.text('Valor', pageW - 16, y, { align: 'right' });
+    y += 8;
 
-  // Footer
-  y += 10;
-  if (y > 275) { doc.addPage(); y = 20; }
-  doc.setDrawColor(226, 232, 240);
-  doc.line(14, y, pageW - 14, y);
-  y += 6;
-  doc.setFontSize(8);
-  doc.setTextColor(148, 163, 184);
-  doc.text('Documento gerado automaticamente pelo MEI Facil IA', 14, y);
-  doc.text('Total de ' + doMes.length + ' lancamentos', pageW - 14, y, { align: 'right' });
-
-  const nomeArquivo = 'relatorio-mei-' + anoSelecionado + '-' + String(mesSelecionado + 1).padStart(2, '0') + '.pdf';
-
-  // Compartilhar ou baixar
-  const blob = doc.output('blob');
-  const file = new File([blob], nomeArquivo, { type: 'application/pdf' });
-
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    navigator.share({
-      files: [file],
-      title: 'Relatorio MEI - ' + mesNome,
-      text: 'Relatorio financeiro de ' + mesNome
-    }).catch(() => {
-      doc.save(nomeArquivo);
+    doc.setFont('helvetica', 'normal');
+    const ordenados = doMes.slice().sort(function(a, b) { return new Date(a.data) - new Date(b.data); });
+    ordenados.forEach(function(l, i) {
+      if (y > 280) { doc.addPage(); y = 20; }
+      if (i % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(14, y - 4, pageW - 28, 7, 'F');
+      }
+      var data = new Date(l.data).toLocaleDateString('pt-BR');
+      var desc = String(l.descricao || '').substring(0, 42);
+      var tipo = l.tipo === 'receita' ? 'Receita' : 'Despesa';
+      doc.setFontSize(8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(data, 16, y);
+      doc.text(desc, 36, y);
+      doc.text(tipo, 120, y);
+      if (l.tipo === 'receita') doc.setTextColor(22, 163, 74);
+      else doc.setTextColor(239, 68, 68);
+      doc.text((l.tipo === 'receita' ? '+ ' : '- ') + 'R$ ' + fmt(l.valor), pageW - 16, y, { align: 'right' });
+      y += 7;
     });
-  } else {
+
+    y += 10;
+    if (y > 275) { doc.addPage(); y = 20; }
+    doc.setDrawColor(226, 232, 240);
+    doc.line(14, y, pageW - 14, y);
+    y += 6;
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Documento gerado pelo MEI Facil IA', 14, y);
+    doc.text('Total: ' + doMes.length + ' lancamentos', pageW - 14, y, { align: 'right' });
+
+    var nomeArquivo = 'relatorio-mei-' + anoSelecionado + '-' + String(mesSelecionado + 1).padStart(2, '0') + '.pdf';
+
+    // Sempre baixa o PDF (mais confiavel no celular)
     doc.save(nomeArquivo);
-    alert('PDF baixado! Agora e so compartilhar no WhatsApp, e-mail ou como preferir.');
+    alert('PDF gerado e baixado! Agora abra o arquivo e compartilhe no WhatsApp ou e-mail.');
+  } catch (e) {
+    console.error(e);
+    alert('Erro ao gerar PDF: ' + (e.message || e));
   }
 }
 
-// ---------- Clientes ----------
+
 async function carregarClientes() {
   try {
     const { data, error } = await supabaseClient
