@@ -106,6 +106,7 @@ async function carregarClientes() {
     const { data, error } = await supabaseClient
       .from('profiles')
       .select('*')
+      .neq('status', 'apagado')
       .order('created_at', { ascending: false });
     if (error) throw error;
     clientes = data || [];
@@ -168,22 +169,30 @@ async function gerenciarCliente(action, userId) {
   if (action === 'pause' && !confirm('Pausar a assinatura deste cliente?')) return;
 
   try {
-    const session = await getSession();
-    const response = await fetch(
-      'https://kpggwsttbvttkjeniftb.supabase.co/functions/v1/manage-client',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + (session?.access_token || '')
-        },
-        body: JSON.stringify({ action, user_id: userId })
-      }
-    );
-    const result = await response.json();
-    if (!response.ok || result.error) throw new Error(result.error || 'Erro');
+    if (action === 'pause') {
+      const { error } = await supabaseClient
+        .from('profiles')
+        .update({ status: 'pausado' })
+        .eq('id', userId);
+      if (error) throw error;
+      alert('Assinatura pausada');
+    } else if (action === 'activate') {
+      const { error } = await supabaseClient
+        .from('profiles')
+        .update({ status: 'ativo' })
+        .eq('id', userId);
+      if (error) throw error;
+      alert('Assinatura ativada');
+    } else if (action === 'delete') {
+      // Soft delete - marca como apagado
+      const { error } = await supabaseClient
+        .from('profiles')
+        .update({ status: 'apagado' })
+        .eq('id', userId);
+      if (error) throw error;
+      alert('Cliente removido');
+    }
     await carregarClientes();
-    alert(action === 'delete' ? 'Cliente apagado' : action === 'pause' ? 'Assinatura pausada' : 'Assinatura ativada');
   } catch (e) {
     alert('Erro: ' + (e.message || 'Tente novamente'));
   }
