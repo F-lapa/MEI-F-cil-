@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Xadrez Mestre</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{min-height:100%}
+body{background:radial-gradient(1200px 600px at 50% -10%,#2a2418 0%,#0c0d10 42%,#07080a 100%);color:#e8e6e1;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px 14px 28px}
+h1{text-align:center;font-size:13px;letter-spacing:.34em;color:#e8c872;font-weight:700;margin:2px 0 10px}
+#eng{text-align:center;font-size:11px;color:#9d937c;margin-bottom:8px}
+#status{max-width:440px;margin:0 auto 14px;text-align:center}
+#status b{display:block;font-size:20px;font-weight:700;color:#fff}
+#status small{color:#9a9388;font-size:12px}
+.shell{max-width:440px;margin:0 auto;padding:8px;background:linear-gradient(180deg,#3a2c1c,#24180f);border-radius:22px;box-shadow:0 18px 50px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,220,150,.18)}
+#board{position:relative;width:100%;aspect-ratio:1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border-radius:12px;overflow:hidden}
+.cell{display:flex;align-items:center;justify-content:center;position:relative}
+.light{background:#ead7b2}
+.dark{background:#b58863}
+.sel{outline:3px solid #6ea8ff;outline-offset:-3px}
+.last-from{background-image:linear-gradient(rgba(255,196,70,.55),rgba(255,196,70,.55))}
+.last-to{background-image:linear-gradient(rgba(255,230,90,.72),rgba(255,230,90,.72))}
+.last-to::after{content:"";position:absolute;inset:12%;border:2px solid rgba(255,255,255,.55);border-radius:8px;pointer-events:none}
+.check{background-image:linear-gradient(rgba(220,60,50,.52),rgba(220,60,50,.52))}
+.coord{position:absolute;font-size:9px;font-weight:800;opacity:.5;pointer-events:none}
+.cf{left:4px;bottom:3px}.cr{right:4px;top:3px}
+.light .coord{color:#6a4a2a}.dark .coord{color:#f3e6c8}
+.pc{width:86%;height:86%;object-fit:contain;pointer-events:none;filter:drop-shadow(0 2px 2px rgba(0,0,0,.28))}
+.dot,.ring{position:absolute;pointer-events:none}
+.dot{width:16%;height:16%;border-radius:50%;background:rgba(20,20,20,.38)}
+.ring{width:74%;height:74%;border-radius:50%;border:4px solid rgba(20,20,20,.4)}
+.flyer{position:fixed;z-index:40;pointer-events:none;object-fit:contain;filter:drop-shadow(0 8px 10px rgba(0,0,0,.35));transition:transform .22s cubic-bezier(.2,.86,.2,1)}
+#trail{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:8}
+.ctrls{max-width:440px;margin:14px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{padding:13px 10px;border:0;border-radius:14px;font-weight:700;font-size:13px;background:#1b1d22;color:#eee;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+button.g{background:linear-gradient(180deg,#f0d078,#c9a227);color:#2a1c08}
+#btnFlip{grid-column:1/-1}
+#moves,#pv{max-width:440px;margin:10px auto 0;background:rgba(20,20,24,.72);border:1px solid rgba(232,200,114,.12);border-radius:14px;padding:12px 14px;font-size:13px;color:#c9c3b8;line-height:1.45}
+#promo,#mate{display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);align-items:center;justify-content:center;z-index:50}
+#promo.on,#mate.on{display:flex}
+#promo div,#mate .box{background:#16171b;padding:18px;border-radius:18px;border:1px solid rgba(232,200,114,.28)}
+#promo div{display:flex;gap:8px}
+#promo img{width:52px;height:52px}
+#mate .box{text-align:center;max-width:86vw}
+#mate h2{color:#e8c872;font-size:26px;margin-bottom:8px}
+#clocks{display:none}
+</style>
+</head>
+<body>
+<h1>XADREZ MESTRE</h1>
+<div id="eng">Carregando Stockfish…</div>
+<div id="status"><b>Escolha a cor do computador</b><small>Brancas ou pretas para o Stockfish</small></div>
+<div class="shell"><div id="board"></div></div>
+<div class="ctrls">
+  <button class="g" id="btnW">Computador de Brancas</button>
+  <button class="g" id="btnB">Computador de Pretas</button>
+  <button id="btnNew">Nova partida</button>
+  <button id="btnUndo">Desfazer</button>
+  <button id="btnFlip">Virar tabuleiro</button>
+  <button id="btnUnstick">Destravar</button>
+  <button id="btnEdit">Editar lance do PC</button>
+</div>
+<div id="clocks">
+  <div class="clk" id="clkW"><span>Brancas</span><b>10:00</b></div>
+  <div class="clk" id="clkB"><span>Pretas</span><b>10:00</b></div>
+</div>
+<div id="moves">Lances: --</div>
+<div id="pv">Abra no Chrome se o Stockfish nao carregar.</div>
+<div id="promo"><div id="promoBox"></div></div>
+<div id="mate"><div class="box"><h2>Xeque-mate</h2><p id="mateTxt"></p></div></div>
+<script>
+(function(){
+  const SRC=function(p){return 'https://lichess1.org/assets/piece/cburnett/'+p+'.svg';};
+  function emptyBoard(){return[['bR','bN','bB','bQ','bK','bB','bN','bR'],['bP','bP','bP','bP','bP','bP','bP','bP'],[null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null],[null,null,null,null,null,null,null,null],['wP','wP','wP','wP','wP','wP','wP','wP'],['wR','wN','wB','wQ','wK','wB','wN','wR']];}
+  const S={board:emptyBoard(),turn:'w',castle:{wK:true,wQ:true,bK:true,bQ:true},ep:null,hist:[],player:'w',started:false,selected:null,last:null,thinking:false,flipped:false,ponder:null,pondering:false,editPc:false};
+  function saveGame(){
+    try{
+      localStorage.setItem('xm_game',JSON.stringify({
+        board:S.board,turn:S.turn,castle:S.castle,ep:S.ep,hist:S.hist,player:S.player,
+        started:S.started,flipped:S.flipped,last:S.last
+      }));
+    }catch(e){}
+  }
+  function loadGame(){
+    try{
+      var g=JSON.parse(localStorage.getItem('xm_game')||'null');
+      if(!g||!g.started||!g.board) return false;
+      S.board=g.board;S.turn=g.turn||'w';S.castle=g.castle||{wK:true,wQ:true,bK:true,bQ:true};
+      S.ep=g.ep||null;S.hist=g.hist||[];S.player=g.player||'w';S.started=true;
+      S.flipped=!!g.flipped;S.last=g.last||null;S.selected=null;S.thinking=false;
+      return true;
+    }catch(e){return false;}
+  }
+  let sf=null,sfOk=false,actx=null,pvCands=[];
+  const inb=(r,c)=>r>=0&&r<8&&c>=0&&c<8;
+  const color=p=>p?p[0]:null;
+  const type=p=>p?p[1]:null;
+  const enemy=c=>c==='w'?'b':'w';
+  function unlockAudio(){try{if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();}catch(e){}}
+  document.addEventListener('pointerdown',unlockAudio,{passive:true});
+  function beep(freq,dur,type,vol,delay){
+    if(!actx)return;
+    var t=actx.currentTime+(delay||0);
+    var o=actx.createOscillator();var g=actx.createGain();
+    o.type=type||'sine';o.frequency.setValueAtTime(freq,t);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(vol||0.12,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+dur+0.02);
+  }
+  function sndMove(){beep(420,0.07,'triangle',0.08);beep(280,0.09,'sine',0.05,0.03);}
+  function sndCapture(){beep(180,0.12,'square',0.09);beep(140,0.16,'sawtooth',0.05,0.05);}
+  function sndCheck(){beep(880,0.1,'square',0.08);beep(1170,0.14,'square',0.08,0.11);}
+  function sndMate(){beep(520,0.16,'triangle',0.1);beep(390,0.2,'triangle',0.09,0.16);beep(260,0.35,'sine',0.1,0.34);try{var u=new SpeechSynthesisUtterance('Xeque-mate');u.lang='pt-BR';u.rate=0.95;speechSynthesis.cancel();speechSynthesis.speak(u);}catch(e){}}
+  function cloneState(){return{board:S.board.map(r=>r.slice()),turn:S.turn,castle:Object.assign({},S.castle),ep:S.ep?S.ep.slice():null};}
+  function applySnap(snap){S.board=snap.board.map(r=>r.slice());S.turn=snap.turn;S.castle=Object.assign({},snap.castle);S.ep=snap.ep?snap.ep.slice():null;}
+  function findKing(c){const k=c+'K';for(let r=0;r<8;r++)for(let col=0;col<8;col++)if(S.board[r][col]===k)return[r,col];return null;}
+  function attacked(tr,tc,by){
+    const dirP=by==='w'?-1:1;
+    for(const dc of[-1,1]){const r=tr+dirP,c=tc+dc;if(inb(r,c)&&S.board[r][c]===by+'P')return true;}
+    for(const d of[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]){const r=tr+d[0],c=tc+d[1];if(inb(r,c)&&S.board[r][c]===by+'N')return true;}
+    for(const d of[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]){const r=tr+d[0],c=tc+d[1];if(inb(r,c)&&S.board[r][c]===by+'K')return true;}
+    for(const x of[[[-1,0],'R'],[[1,0],'R'],[[0,-1],'R'],[[0,1],'R'],[[-1,-1],'B'],[[-1,1],'B'],[[1,-1],'B'],[[1,1],'B']]){
+      let r=tr+x[0][0],c=tc+x[0][1];
+      while(inb(r,c)){const p=S.board[r][c];if(p){if(color(p)===by&&(type(p)===x[1]||type(p)==='Q'))return true;break;}r+=x[0][0];c+=x[0][1];}
+    }
+    return false;
+  }
+  function inCheck(c){const k=findKing(c);return !k||attacked(k[0],k[1],enemy(c));}
+  function rawMoves(r,c){
+    const p=S.board[r][c];if(!p||color(p)!==S.turn)return[];
+    const t=type(p),me=color(p),out=[];
+    const add=(tr,tc,ex)=>{if(!inb(tr,tc))return;const q=S.board[tr][tc];if(q&&color(q)===me)return;out.push(Object.assign({fr:r,fc:c,tr:tr,tc:tc,promo:null,ep:false,castle:null},ex||{}));};
+    if(t==='P'){
+      const dir=me==='w'?-1:1,start=me==='w'?6:1,last=me==='w'?0:7;
+      if(inb(r+dir,c)&&!S.board[r+dir][c]){
+        if(r+dir===last)['Q','R','B','N'].forEach(pr=>add(r+dir,c,{promo:pr}));else add(r+dir,c);
+        if(r===start&&!S.board[r+2*dir][c])add(r+2*dir,c);
+      }
+      for(const dc of[-1,1]){
+        const tr=r+dir,tc=c+dc;if(!inb(tr,tc))continue;
+        if(S.board[tr][tc]&&color(S.board[tr][tc])!==me){if(tr===last)['Q','R','B','N'].forEach(pr=>add(tr,tc,{promo:pr}));else add(tr,tc);}
+        if(S.ep&&S.ep[0]===tr&&S.ep[1]===tc)add(tr,tc,{ep:true});
+      }
+    } else if(t==='N'){
+      [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(d=>add(r+d[0],c+d[1]));
+    } else if(t==='K'){
+      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(d=>add(r+d[0],c+d[1]));
+      if(!inCheck(me)){
+        if(S.castle[me+'K']&&!S.board[r][5]&&!S.board[r][6]&&S.board[r][7]===me+'R'&&!attacked(r,5,enemy(me))&&!attacked(r,6,enemy(me)))add(r,6,{castle:'K'});
+        if(S.castle[me+'Q']&&!S.board[r][1]&&!S.board[r][2]&&!S.board[r][3]&&S.board[r][0]===me+'R'&&!attacked(r,2,enemy(me))&&!attacked(r,3,enemy(me)))add(r,2,{castle:'Q'});
+      }
+    } else {
+      const dirs=t==='B'?[[-1,-1],[-1,1],[1,-1],[1,1]]:t==='R'?[[-1,0],[1,0],[0,-1],[0,1]]:[[-1,-1],[-1,1],[1,-1],[1,1],[-1,0],[1,0],[0,-1],[0,1]];
+      for(const d of dirs){let tr=r+d[0],tc=c+d[1];while(inb(tr,tc)){const q=S.board[tr][tc];if(!q)add(tr,tc);else{if(color(q)!==me)add(tr,tc);break;}tr+=d[0];tc+=d[1];}}
+    }
+    return out;
+  }
+  function legalMoves(sq){
+    const list=[];
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      if(sq&&(sq[0]!==r||sq[1]!==c))continue;
+      for(const m of rawMoves(r,c)){
+        const snap=cloneState();playMove(m,true);const ok=!inCheck(enemy(S.turn));applySnap(snap);if(ok)list.push(m);
+      }
+    }
+    return list;
+  }
+  function playMove(m,silent){
+    const p=S.board[m.fr][m.fc];if(!p)return false;
+    const me=color(p);
+    S.board[m.fr][m.fc]=null;
+    if(m.ep)S.board[m.fr][m.tc]=null;
+    S.board[m.tr][m.tc]=m.promo?(me+m.promo):p;
+    if(m.castle==='K'){S.board[m.tr][7]=null;S.board[m.tr][5]=me+'R';}
+    if(m.castle==='Q'){S.board[m.tr][0]=null;S.board[m.tr][3]=me+'R';}
+    if(type(p)==='K'){S.castle[me+'K']=false;S.castle[me+'Q']=false;}
+    if(m.fr===7&&m.fc===0)S.castle.wQ=false;if(m.fr===7&&m.fc===7)S.castle.wK=false;
+    if(m.fr===0&&m.fc===0)S.castle.bQ=false;if(m.fr===0&&m.fc===7)S.castle.bK=false;
+    if(m.tr===0&&m.tc===0)S.castle.bQ=false;if(m.tr===0&&m.tc===7)S.castle.bK=false;
+    if(m.tr===7&&m.tc===0)S.castle.wQ=false;if(m.tr===7&&m.tc===7)S.castle.wK=false;
+    S.ep=(type(p)==='P'&&Math.abs(m.tr-m.fr)===2)?[(m.fr+m.tr)/2,m.fc]:null;
+    S.turn=enemy(me);
+    if(!silent){S.hist.push(m);S.last={fr:m.fr,fc:m.fc,tr:m.tr,tc:m.tc};}
+    return true;
+  }
+  function fen(){
+    let rows=[];
+    for(let r=0;r<8;r++){let e=0,s='';for(let c=0;c<8;c++){const p=S.board[r][c];if(!p){e++;continue;}if(e){s+=e;e=0;}s+=color(p)==='w'?type(p):type(p).toLowerCase();}if(e)s+=e;rows.push(s);}
+    const cas=((S.castle.wK?'K':'')+(S.castle.wQ?'Q':'')+(S.castle.bK?'k':'')+(S.castle.bQ?'q':''))||'-';
+    const ep=S.ep?'abcdefgh'[S.ep[1]]+(8-S.ep[0]):'-';
+    return rows.join('/')+' '+S.turn+' '+cas+' '+ep+' 0 1';
+  }
+  function moveFromUci(uci){
+    const fc='abcdefgh'.indexOf(uci[0]),fr=8-(+uci[1]),tc='abcdefgh'.indexOf(uci[2]),tr=8-(+uci[3]);
+    const promo=uci[4]?uci[4].toUpperCase():null;
+    return legalMoves().find(m=>m.fr===fr&&m.fc===fc&&m.tr===tr&&m.tc===tc&&(!promo||m.promo===promo));
+  }
+  function pieceEl(p){
+    const img=document.createElement('img');
+    img.className='pc';img.src=SRC(p);img.alt=p;
+    img.onerror=function(){img.onerror=null;img.removeAttribute('src');img.style.width='70%';img.style.height='70%';img.style.borderRadius='50%';img.style.background=p[0]==='b'?'#111':'#f4efe3';img.style.border=p[0]==='b'?'2px solid #f0d9b5':'2px solid #333';};
+    return img;
+  }
+  function render(){
+    const el=document.getElementById('board');el.innerHTML='';
+    const dests=S.selected?(S.editPc?compMoves(S.selected):playerMoves(S.selected)):[];
+    const destSet=new Set(dests.map(m=>m.tr+','+m.tc));
+    const capSet=new Set(dests.filter(m=>S.board[m.tr][m.tc]||m.ep).map(m=>m.tr+','+m.tc));
+    const k=findKing(S.turn),check=inCheck(S.turn);
+    for(let i=0;i<64;i++){
+      let r=(i>>3),c=i&7;if(S.flipped){r=7-r;c=7-c;}
+      const cell=document.createElement('div');
+      cell.className='cell '+(((r+c)%2===0)?'light':'dark');
+      cell.dataset.r=r;cell.dataset.c=c;
+      if(S.selected&&S.selected[0]===r&&S.selected[1]===c)cell.classList.add('sel');
+      if(S.last&&S.last.fr===r&&S.last.fc===c)cell.classList.add('last-from');
+      if(S.last&&S.last.tr===r&&S.last.tc===c)cell.classList.add('last-to');
+      if(check&&k&&k[0]===r&&k[1]===c)cell.classList.add('check');
+      if((S.flipped?r===0:r===7)){const s=document.createElement('span');s.className='coord cf';s.textContent='abcdefgh'[c];cell.appendChild(s);}
+      if((S.flipped?c===7:c===0)){const s=document.createElement('span');s.className='coord cr';s.textContent=String(8-r);cell.appendChild(s);}
+      const key=r+','+c;
+      if(destSet.has(key)){const m=document.createElement('div');m.className=capSet.has(key)?'ring':'dot';cell.appendChild(m);}
+      const p=S.board[r][c];if(p)cell.appendChild(pieceEl(p));
+      cell.onclick=(function(rr,cc){return function(){tap(rr,cc);};})(r,c);
+      el.appendChild(cell);
+    }
+    status();movesList();drawTrail();
+  }
+  function cellAt(r,c){return document.querySelector('#board .cell[data-r="'+r+'"][data-c="'+c+'"]');}
+  function drawTrail(){
+    var old=document.getElementById('trail');if(old) old.remove();
+    if(!S.last) return;
+    var a=cellAt(S.last.fr,S.last.fc),b=cellAt(S.last.tr,S.last.tc);
+    var board=document.getElementById('board');
+    if(!a||!b||!board) return;
+    var br=board.getBoundingClientRect(),ar=a.getBoundingClientRect(),cr=b.getBoundingClientRect();
+    var x1=ar.left-br.left+ar.width/2,y1=ar.top-br.top+ar.height/2;
+    var x2=cr.left-br.left+cr.width/2,y2=cr.top-br.top+cr.height/2;
+    var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+    svg.id='trail';svg.setAttribute('viewBox','0 0 '+br.width+' '+br.height);
+    svg.innerHTML='<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="rgba(255,230,80,.95)"/></marker></defs><line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="rgba(255,214,60,.88)" stroke-width="7" stroke-linecap="round" marker-end="url(#arr)"/>';
+    board.appendChild(svg);
+  }
+  function animateMove(m){
+    var a=cellAt(m.fr,m.fc),b=cellAt(m.tr,m.tc);if(!a||!b)return;
+    var img=b.querySelector('img');if(!img)return;
+    var ra=a.getBoundingClientRect(),rb=b.getBoundingClientRect();
+    var fly=img.cloneNode(true);fly.className='flyer';
+    fly.style.left=ra.left+'px';fly.style.top=ra.top+'px';
+    fly.style.width=ra.width+'px';fly.style.height=ra.height+'px';
+    document.body.appendChild(fly);
+    img.style.opacity='0';
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        fly.style.transform='translate('+(rb.left-ra.left)+'px,'+(rb.top-ra.top)+'px)';
+      });
+    });
+    setTimeout(function(){img.style.opacity='1';if(fly.parentNode)fly.parentNode.removeChild(fly);},230);
+  }
+  function moveUci(m){return 'abcdefgh'[m.fc]+(8-m.fr)+'abcdefgh'[m.tc]+(8-m.tr)+(m.promo?m.promo.toLowerCase():'');}
+  function startPonder(){
+    if(!sfOk||!sf||!S.ponder||S.turn!==S.player||S.thinking) return;
+    try{
+      sf.postMessage('position fen '+fen()+' moves '+S.ponder);
+      sf.postMessage('go ponder');
+      S.pondering=true;
+    }catch(e){S.pondering=false;}
+  }
+  function applyAndShow(m,noComp){
+    unlockAudio();
+    if(S.pondering){try{sf.postMessage('stop');}catch(e){}S.pondering=false;S.ponder=null;}
+    var captured=!!(S.board[m.tr][m.tc]||m.ep);
+    S.selected=null;
+    playMove(m,false);
+    var mate=!legalMoves().length&&inCheck(S.turn);
+    var chk=inCheck(S.turn);
+    render();
+    animateMove(m);
+    if(mate){sndMate();document.getElementById('mateTxt').textContent=(S.turn==='w'?'Pretas':'Brancas')+' venceram.';document.getElementById('mate').classList.add('on');}
+    else if(chk) sndCheck();
+    else if(captured) sndCapture();
+    else sndMove();
+    saveGame();
+    if(noComp||mate) return;
+    if(S.turn!==S.player) setTimeout(computer,80);
+  }
+  function status(){
+    const box=document.getElementById('status');
+    if(!S.started){box.innerHTML='<b>Escolha a cor do computador</b><small>Brancas ou pretas para o Stockfish</small>';return;}
+    const moves=legalMoves();
+    if(!moves.length){box.innerHTML=inCheck(S.turn)?'<b>Xeque-mate</b><small>'+(S.turn==='w'?'Pretas':'Brancas')+' venceram</small>':'<b>Empate</b>';return;}
+    if(S.thinking){box.innerHTML='<b>Stockfish pensando…</b>';return;}
+    if(S.editPc){box.innerHTML='<b>Editando o lance do PC</b><small>Toque na peca do computador e no destino</small>';return;}
+    box.innerHTML=S.turn===S.player?'<b>Sua vez</b><small>Toque na peca e depois na casa</small>':'<b>Vez do computador</b>';
+    if(inCheck(S.turn)){var sm=box.querySelector('small');if(sm)sm.textContent='Xeque!';}
+  }
+  function movesList(){
+    const f='abcdefgh';let t='';
+    S.hist.forEach(function(m,i){if(i%2===0)t+=(i/2+1)+'. ';t+=f[m.fc]+(8-m.fr)+f[m.tc]+(8-m.tr)+(m.promo||'')+' ';});
+    document.getElementById('moves').textContent=t||'Lances: --';
+  }
+  function compMoves(sq){
+    var side=enemy(S.player),list=[];
+    for(var r=0;r<8;r++)for(var c=0;c<8;c++){
+      if(sq&&(sq[0]!==r||sq[1]!==c))continue;
+      if(!S.board[r][c]||color(S.board[r][c])!==side)continue;
+      var saved=S.turn;S.turn=side;
+      rawMoves(r,c).forEach(function(m){list.push(m);});
+      S.turn=saved;
+    }
+    return list;
+  }
+  function replayHist(h){
+    S.board=emptyBoard();S.turn='w';S.castle={wK:true,wQ:true,bK:true,bQ:true};S.ep=null;S.hist=[];S.last=null;S.selected=null;
+    h.forEach(function(m){playMove(m,false);});
+  }
+  function beginEditPc(){
+    if(!S.started||S.thinking) return;
+    if(S.editPc){S.editPc=false;S.selected=null;render();return;}
+    if(!S.hist.length){document.getElementById('pv').textContent='Ainda nao ha lance do computador.';return;}
+    var lastIsWhite=(S.hist.length-1)%2===0;
+    var lastSide=lastIsWhite?'w':'b';
+    if(lastSide===S.player){
+      document.getElementById('pv').textContent='Desfaça o seu lance primeiro para editar o do computador.';
+      return;
+    }
+    var keep=S.hist.slice(0,-1);
+    replayHist(keep);
+    S.editPc=true;S.selected=null;
+    document.getElementById('pv').textContent='Lance do PC desfeito. Escolha outro destino.';
+    saveGame();render();
+  }
+  function playerMoves(sq){
+    var list=[];
+    for(var r=0;r<8;r++)for(var c=0;c<8;c++){
+      if(sq&&(sq[0]!==r||sq[1]!==c))continue;
+      if(!S.board[r][c]||color(S.board[r][c])!==S.player)continue;
+      var saved=S.turn;S.turn=S.player;
+      rawMoves(r,c).forEach(function(m){list.push(m);});
+      S.turn=saved;
+    }
+    return list;
+  }
+  function tap(r,c){
+    if(!S.started||S.thinking)return;
+    if(!S.editPc&&S.turn!==S.player)return;
+    unlockAudio();
+    const p=S.board[r][c];
+    var side=S.editPc?enemy(S.player):S.player;
+    var movesOf=S.editPc?compMoves:playerMoves;
+    if(S.selected){
+      const opts=movesOf(S.selected).filter(function(m){return m.tr===r&&m.tc===c;});
+      if(opts.length){
+        if(opts.length>1&&opts[0].promo){askPromo(opts);return;}
+        if(S.editPc){S.editPc=false;applyAndShow(opts[0],true);document.getElementById('pv').textContent='Lance do PC alterado. Stockfish segue desta posicao.';return;}
+        applyAndShow(opts[0]);return;
+      }
+      if(p&&color(p)===side){S.selected=[r,c];render();return;}
+      S.selected=null;render();return;
+    }
+    if(p&&color(p)===side){S.selected=[r,c];render();}
+  }
+  function askPromo(opts){
+    const box=document.getElementById('promoBox');box.innerHTML='';
+    opts.forEach(function(m){
+      const b=document.createElement('button');
+      b.appendChild(pieceEl((S.editPc?enemy(S.player):S.player)+m.promo));
+      b.onclick=function(){document.getElementById('promo').classList.remove('on');applyAndShow(m);};
+      box.appendChild(b);
+    });
+    document.getElementById('promo').classList.add('on');
+  }
+  function pieceStats(){
+    var val={K:0,Q:900,R:500,B:330,N:320,P:100},n=0,w=0,b=0,q=0;
+    for(var r=0;r<8;r++)for(var c=0;c<8;c++){
+      var p=S.board[r][c];if(!p)continue;
+      n++;if(p[1]==='Q')q++;
+      if(p[0]==='w')w+=val[p[1]];else b+=val[p[1]];
+    }
+    return {n:n,w:w,b:b,q:q};
+  }
+  function isEndgame(){var s=pieceStats();return s.n<=12||s.q===0;}
+  function userWinning(){
+    var s=pieceStats();
+    var mine=S.player==='w'?s.w:s.b;
+    var his=S.player==='w'?s.b:s.w;
+    return mine>=his+250;
+  }
+  function pickAttack(defUci){
+    var list=[];
+    for(var i=0;i<pvCands.length;i++) if(pvCands[i]&&pvCands[i].uci) list.push(pvCands[i]);
+    if(!list.length) return defUci;
+    list.sort(function(a,b){
+      if(a.mate>0&&b.mate>0) return a.mate-b.mate;
+      if(a.mate>0) return -1;
+      if(b.mate>0) return 1;
+      return b.cp-a.cp;
+    });
+    var best=list[0];
+    var floor=best.mate>0?0:(best.cp-50);
+    var chosen=best.uci,bestHit=-1;
+    for(var j=0;j<list.length;j++){
+      var x=list[j];
+      if(!(x.mate>0)&&x.cp<floor) continue;
+      var mv=moveFromUci(x.uci);if(!mv) continue;
+      var hit=0;
+      if(S.board[mv.tr][mv.tc]) hit+=40;
+      if(mv.ep) hit+=25;
+      var snap=cloneState();playMove(mv,true);
+      if(inCheck(S.turn)) hit+=55;
+      var k=findKing(S.turn);
+      if(k){
+        var after=Math.abs(mv.tr-k[0])+Math.abs(mv.tc-k[1]);
+        var before=Math.abs(mv.fr-k[0])+Math.abs(mv.fc-k[1]);
+        if(after<before) hit+=18;
+      }
+      applySnap(snap);
+      if(x.mate===1) hit+=100;
+      if(hit>bestHit){bestHit=hit;chosen=x.uci;}
+    }
+    return chosen||defUci;
+  }
+  function clearThink(){
+    if(window._tw){clearTimeout(window._tw);window._tw=null;}
+    if(window._tw2){clearTimeout(window._tw2);window._tw2=null;}
+  }
+  function restartEngine(){
+    sfOk=false;
+    try{if(sf)sf.terminate();}catch(e){}
+    sf=null;
+    document.getElementById('eng').textContent='Reiniciando Stockfish…';
+    bootSF();
+  }
+  function forceMove(){
+    clearThink();
+    S.thinking=false;
+    S.wantComp=!!(S.started&&S.turn!==S.player);
+    try{if(sf)sf.postMessage('stop');}catch(e){}
+    try{if(sf)sf.terminate();}catch(e){}
+    sf=null;sfOk=false;
+    document.getElementById('pv').textContent='Tela liberada. Relicando Stockfish…';
+    render();
+    saveGame();
+    bootSF();
+  }
+  function computer(){
+    if(S.turn===S.player)return;
+    if(!sfOk||!sf){document.getElementById('pv').textContent='Stockfish ainda carregando… Toque Destravar.';return;}
+    S.thinking=true;render();
+    clearThink();
+    try{
+      sf.postMessage('stop');
+      sf.postMessage('position fen '+fen());
+      pvCands=[];
+      try{sf.postMessage('setoption name MultiPV value 1');}catch(e){}
+      sf.postMessage('go movetime 2000');
+      window._tw=setTimeout(function(){
+        if(!S.thinking) return;
+        try{sf.postMessage('stop');}catch(e){}
+        window._tw2=setTimeout(function(){
+          if(!S.thinking) return;
+          S.thinking=false;
+          document.getElementById('pv').textContent='Motor nao respondeu. Toque Destravar.';
+          render();
+        },800);
+      },4000);
+    }catch(e){
+      S.thinking=false;render();
+      document.getElementById('pv').textContent='Falha ao pedir lance. Toque Destravar.';
+    }
+  }
+  function start(col){
+    document.getElementById('mate').classList.remove('on');
+    S.board=emptyBoard();S.turn='w';S.castle={wK:true,wQ:true,bK:true,bQ:true};S.ep=null;S.hist=[];S.selected=null;S.last=null;
+    S.player=col;S.started=true;S.thinking=false;S.flipped=col==='b';S.editPc=false;
+    saveGame();
+    render();if(col==='b')setTimeout(computer,250);
+  }
+  function onSf(line){
+    line=String(line||'');
+    if(line==='uciok'||line==='readyok'){
+      sfOk=true;
+      try{sf.postMessage('setoption name Skill Level value 20');sf.postMessage('setoption name Hash value 128');sf.postMessage('setoption name Threads value 1');sf.postMessage('setoption name MultiPV value 1');sf.postMessage('setoption name Contempt value 50');sf.postMessage('setoption name Ponder value false');}catch(e){}
+      document.getElementById('eng').textContent=window._sfName||'Stockfish MAX';
+      document.getElementById('pv').textContent='Stockfish 18 Lite: 2s por lance.';
+      if(S.wantComp&&S.started&&S.turn!==S.player&&!S.thinking){
+        S.wantComp=false;
+        setTimeout(computer,400);
+      }
+      return;
+    }
+    var cp=line.match(/score cp (-?\d+)/);var mate=line.match(/score mate (-?\d+)/);
+    var pvm=line.match(/\bpv\s+([a-h][1-8][a-h][1-8][qrbn]?)/);
+    if(pvm){
+      var cand={uci:pvm[1],cp:cp?+cp[1]:0,mate:mate?+mate[1]:0};
+      var mpi=line.match(/multipv (\d+)/);
+      var idx=mpi?(+mpi[1]-1):0;
+      pvCands[idx]=cand;
+    }
+    if(mate)document.getElementById('pv').textContent='Stockfish: mate em '+Math.abs(+mate[1]);
+    else if(cp)document.getElementById('pv').textContent='Stockfish: '+(+cp[1]>=0?'+':'')+(+cp[1]/100).toFixed(2);
+    if(line.indexOf('bestmove')===0){
+      var parts=line.split(/\s+/);
+      var mv=parts[1];
+      S.ponder=null;S.pondering=false;
+      clearThink();
+      S.thinking=false;
+      var m=moveFromUci(mv||'');
+      if(m)applyAndShow(m);else render();
+    }
+  }
+  function bootSF(){
+    var urls=['stockfish-18-lite-single.js','./stockfish-18-lite-single.js','stockfish.js','./stockfish.js'];
+    window._sfGen=(window._sfGen||0)+1;
+    var gen=window._sfGen;
+    function go(i){
+      if(sfOk) return;
+      if(i>=urls.length){
+        if(!sfOk){
+          document.getElementById('eng').textContent='Stockfish bloqueado';
+          document.getElementById('pv').textContent='Recarregue. Precisa do stockfish-18-lite-single.js e .wasm.';
+        }
+        return;
+      }
+      var my=++gen;
+      try{
+        var w=new Worker(urls[i]);
+        window._sfName=urls[i].indexOf('18')>=0?'Stockfish 18 Lite':'Stockfish 10';
+        w.onmessage=function(e){
+          if(my!==gen && !sfOk) return;
+          onSf(e.data);
+        };
+        w.onerror=function(){
+          if(my!==gen||sfOk) return;
+          try{w.terminate();}catch(err){}
+          go(i+1);
+        };
+        sf=w;
+        w.postMessage('uci');
+        w.postMessage('isready');
+        setTimeout(function(){
+          if(my!==gen||sfOk) return;
+          try{w.terminate();}catch(err){}
+          go(i+1);
+        }, urls[i].indexOf('18')>=0?20000:7000);
+      }catch(e){go(i+1);}
+    }
+    document.getElementById('eng').textContent='Carregando Stockfish 18 Lite…';
+    go(0);
+  }
+  document.getElementById('btnW').onclick=function(){start('b');};
+  document.getElementById('btnB').onclick=function(){start('w');};
+  document.getElementById('btnNew').onclick=function(){start(S.started?S.player:'w');};
+  document.getElementById('btnFlip').onclick=function(){S.flipped=!S.flipped;saveGame();render();};
+  document.getElementById('mate').onclick=function(){document.getElementById('mate').classList.remove('on');};
+  document.getElementById('btnUnstick').onclick=function(){forceMove();};
+  document.getElementById('btnEdit').onclick=function(){beginEditPc();};
+  document.getElementById('btnUndo').onclick=function(){
+    if(!S.hist.length)return;
+    S.thinking=false;clearThink();
+    S.hist.pop();if(S.hist.length)S.hist.pop();
+    var replay=S.hist.slice();
+    S.board=emptyBoard();S.turn='w';S.castle={wK:true,wQ:true,bK:true,bQ:true};S.ep=null;S.hist=[];S.last=null;S.selected=null;
+    replay.forEach(function(m){playMove(m,false);});saveGame();render();
+  };
+  bootSF();
+  if(loadGame()){
+    document.getElementById('pv').textContent='Partida recuperada. Se o motor travar, atualize de novo ou toque Destravar.';
+  }
+  render();
+  if(S.started&&S.turn!==S.player) setTimeout(computer,400);
+})();
+</script>
+</body>
+</html>
